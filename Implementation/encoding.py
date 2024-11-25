@@ -1,7 +1,7 @@
 # encoding.py
 
 from collections import namedtuple
-import numpy as np
+import copy
 
 # Define the primitives and parameters
 PRIMITIVES = [
@@ -9,10 +9,10 @@ PRIMITIVES = [
     'dil_conv_d2',         # tf.keras.layers.Conv2D with dilation_rate=2
     'dil_conv_d3',         # tf.keras.layers.Conv2D with dilation_rate=3
     'dil_conv_d4',         # tf.keras.layers.Conv2D with dilation_rate=4
-    'Dsep_conv',           # tf.keras.layers.DepthwiseConv2D
+    'Dsep_conv',           # DepthwiseSeparableConv2D
     'invert_Bot_Conv_E2',  # Inverted Bottleneck Block
     'conv_transpose',      # tf.keras.layers.Conv2DTranspose
-    'identity'             # tf.keras.layers.Lambda (Identity)
+    'identity'             # tf.keras.layers.Identity
 ]
 
 CHANNELS = [16, 32, 48, 64, 16, 32, 48, 64]
@@ -22,21 +22,17 @@ K = [1, 3, 5, 7, 1, 3, 5, 7]
 Genotype = namedtuple('Genotype', 'Branch1 Branch2 Branch3')
 
 def gray_to_int(gray_code):
-    """
-    Convert a Gray code string to an integer.
-    """
+    # Convert the Gray code string to an integer
     gray_bits = [int(bit) for bit in gray_code]
     binary_bits = [gray_bits[0]]
     for i in range(1, len(gray_bits)):
-        next_bit = gray_bits[i] ^ binary_bits[i - 1]
-        binary_bits.append(next_bit)
+        next_binary_bit = gray_bits[i] ^ binary_bits[i - 1]
+        binary_bits.append(next_binary_bit)
     binary_str = ''.join(str(bit) for bit in binary_bits)
-    return int(binary_str, 2)
+    integer = int(binary_str, 2)
+    return integer
 
 def bstr_to_rstr(bstring):
-    """
-    Convert a binary string to a list of integers by interpreting every 3 bits.
-    """
     rstr = []
     for i in range(0, len(bstring), 3):
         r = gray_to_int(bstring[i:i+3])
@@ -44,16 +40,10 @@ def bstr_to_rstr(bstring):
     return rstr
 
 def convert_cell(cell_bit_string):
-    """
-    Convert a cell bit-string to genome representation.
-    """
     tmp = [cell_bit_string[i:i + 3] for i in range(0, len(cell_bit_string), 3)]
     return [tmp[i:i + 3] for i in range(0, len(tmp), 3)]
 
 def convert(bit_string):
-    """
-    Convert the network bit-string to genome representation for three branches.
-    """
     third = len(bit_string) // 3
     b1 = convert_cell(bit_string[:third])
     b2 = convert_cell(bit_string[third:2*third])
@@ -61,11 +51,8 @@ def convert(bit_string):
     return [b1, b2, b3]
 
 def decode(genome):
-    """
-    Decode the genome into a Genotype with three branches.
-    """
-    genotype = genome.copy()
-    channels = genotype.pop(0)
+    genotype = copy.deepcopy(genome)
+    channels = genome.pop(0)
     genotype = convert(genome)
     b1 = genotype[0]
     b2 = genotype[1]
