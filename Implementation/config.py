@@ -23,7 +23,7 @@ val_labels = np.random.rand(200, 64, 64, 3).astype(np.float32)
 
 DATASET_TRAIN = tf.data.Dataset.from_tensor_slices((train_images, train_labels)).batch(32)
 DATASET_VAL = tf.data.Dataset.from_tensor_slices((val_images, val_labels)).batch(32)
-EPOCHS = 5  # Number of epochs for training when using PSNR
+EPOCHS = 25  # Number of epochs for training when using PSNR
 
 # Device Configuration
 DEVICE = '/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'
