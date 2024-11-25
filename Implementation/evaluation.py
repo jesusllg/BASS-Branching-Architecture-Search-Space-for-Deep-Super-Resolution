@@ -2,15 +2,16 @@
 
 import tensorflow as tf
 from tensorflow.keras import backend as K
-from tensorflow.python.framework.convert_to_constants import convert_variables_to_constants_v2_as_graph
 from config import EVALUATION_METRIC, DATASET_TRAIN, DATASET_VAL, EPOCHS
 from model_builder import get_model
-from utils import psnr, soft_pareto_dominates
-import numpy as np
+from utils import psnr
 
 def replace_activations_with_identity(model):
     """
     Replace all activation functions in the model with linear activations.
+
+    Args:
+        model (tf.keras.Model): The model whose activations will be replaced.
     """
     for layer in model.layers:
         if hasattr(layer, 'activation') and layer.activation is not None:
@@ -20,7 +21,13 @@ def replace_activations_with_identity(model):
 
 def synflow_metric_nas(model):
     """
-    Compute the SynFlow score for the given model with weights and biases initialized to 0.5.
+    Compute the SynFlow score for the given model.
+
+    Args:
+        model (tf.keras.Model): The model to evaluate.
+
+    Returns:
+        float: The SynFlow score.
     """
     replace_activations_with_identity(model)
 
@@ -50,53 +57,19 @@ def synflow_metric_nas(model):
     # Compute gradients
     grads = tape.gradient(loss, model.trainable_variables)
 
-    # SynFlow score
+    # SynFlow score calculation
     synflow_score = 0.0
     for param, grad in zip(model.trainable_variables, grads):
         synflow_score += tf.reduce_sum(tf.abs(param * grad)).numpy()
 
     return synflow_score
 
-def calculate_model_flops(model):
-    """
-    Calculate the FLOPs of the model.
-    """
-    # Ensure the model is built
-    if not model.built:
-        model.build(input_shape=(None, 64, 64, 3))
-
-    # Convert Keras model to ConcreteFunction
-    @tf.function
-    def forward_pass(inputs):
-        return model(inputs)
-
-    concrete_func = forward_pass.get_concrete_function(tf.TensorSpec(shape=(1, 64, 64, 3), dtype=tf.float32))
-
-    # Get frozen ConcreteFunction
-    frozen_func, graph_def = convert_variables_to_constants_v2_as_graph(concrete_func)
-
-    # Profile the model
-    run_meta = tf.compat.v1.RunMetadata()
-    opts = tf.compat.v1.profiler.ProfileOptionBuilder.float_operation()
-    flops = tf.compat.v1.profiler.profile(graph=frozen_func.graph, run_meta=run_meta, cmd='op', options=opts)
-
-    # Get total FLOPs
-    total_flops = flops.total_float_ops
-    return total_flops
-
-def count_params(model):
-    """
-    Count the total number of parameters in the model.
-    """
-    return model.count_params()
-
-def evaluate_model(individual, n_eval):
+def evaluate_model(individual):
     """
     Evaluate the model based on the selected evaluation metric (PSNR or SynFlow).
-    
+
     Args:
         individual: The genotype representing the model architecture.
-        n_eval: The evaluation number or iteration.
 
     Returns:
         float: The evaluation score (negative PSNR or negative SynFlow score).
@@ -109,18 +82,21 @@ def evaluate_model(individual, n_eval):
         loss_fn = tf.keras.losses.MeanSquaredError()
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
         model.compile(optimizer=optimizer, loss=loss_fn, metrics=[psnr])
-        
+
         # Check if datasets are defined
         if DATASET_TRAIN is None or DATASET_VAL is None:
             raise ValueError("DATASET_TRAIN and DATASET_VAL must be defined when using PSNR evaluation.")
-        
+
         history = model.fit(DATASET_TRAIN, epochs=EPOCHS, validation_data=DATASET_VAL)
         valid_psnr = history.history['val_psnr'][-1]
         K.clear_session()
         return -valid_psnr  # Negative because we minimize in optimization
+
     elif EVALUATION_METRIC == 'SynFlow':
         synflow_score = synflow_metric_nas(model)
         K.clear_session()
         return -synflow_score  # Negative because we minimize
+
     else:
         raise ValueError("Invalid evaluation metric specified.")
+        
