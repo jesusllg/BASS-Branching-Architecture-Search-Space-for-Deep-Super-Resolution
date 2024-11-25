@@ -1,26 +1,5 @@
 # BASS: a Branching Architecture Search Space for Super-Resolution
 
-## Table of Contents
-- [Introduction](#introduction)
-- [Features](#features)
-- [Performance Comparison](#performance-comparison)
-- [How It Works](#how-it-works)
-  - [Encoding and Decoding](#encoding-and-decoding)
-  - [Model Building](#model-building)
-  - [Evaluation Metrics](#evaluation-metrics)
-  - [Optimization Process](#optimization-process)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Configuration](#configuration)
-  - [Running the Algorithm](#running-the-algorithm)
-- [Algorithm Implemented](#algorithm-implemented)
-  - [NSGA-III](#nsga-iii)
-- [Research Publications](#research-publications)
-- [Contributing](#contributing)
-- [License](#license)
-- [Quick Links](#quick-links)
-
 ## Introduction
 
 The objective of this repository is to provide a platform for users to utilize our search space, known as **BASS** (Branching Architecture Search Space), dedicated to the automatic design of neural network architectures for super-resolution image restoration. We employ **Multi-Depth Branch Networks** as the foundation for this search space over which a multi-objective optimization process is used to design effective architectures.
