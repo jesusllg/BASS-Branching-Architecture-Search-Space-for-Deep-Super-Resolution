@@ -1,7 +1,6 @@
 # encoding.py
 
 from collections import namedtuple
-import numpy as np
 
 # Define the primitives and parameters
 PRIMITIVES = [
@@ -15,20 +14,25 @@ PRIMITIVES = [
     'identity'             # tf.keras.layers.Lambda (Identity)
 ]
 
-CHANNELS = [16, 32, 48, 64, 16, 32, 48, 64]
-REPEAT = [1, 2, 3, 4, 1, 2, 3, 4]
-K = [1, 3, 5, 7, 1, 3, 5, 7]
+CHANNELS = [16, 32, 48, 64]
+REPEAT = [1, 2, 3, 4]
+KERNEL_SIZES = [1, 3, 5, 7]
 
 Genotype = namedtuple('Genotype', 'Branch1 Branch2 Branch3')
 
 def gray_to_int(gray_code):
     """
     Convert a Gray code string to an integer.
+
+    Args:
+        gray_code (str): Gray code string.
+
+    Returns:
+        int: Corresponding integer value.
     """
-    gray_bits = [int(bit) for bit in gray_code]
-    binary_bits = [gray_bits[0]]
-    for i in range(1, len(gray_bits)):
-        next_bit = gray_bits[i] ^ binary_bits[i - 1]
+    binary_bits = [int(gray_code[0])]
+    for i in range(1, len(gray_code)):
+        next_bit = int(gray_code[i]) ^ binary_bits[i - 1]
         binary_bits.append(next_bit)
     binary_str = ''.join(str(bit) for bit in binary_bits)
     return int(binary_str, 2)
@@ -36,23 +40,48 @@ def gray_to_int(gray_code):
 def bstr_to_rstr(bstring):
     """
     Convert a binary string to a list of integers by interpreting every 3 bits.
+
+    Args:
+        bstring (str): Binary string.
+
+    Returns:
+        list: List of integers representing operation indices.
     """
     rstr = []
     for i in range(0, len(bstring), 3):
-        r = gray_to_int(bstring[i:i+3])
+        segment = bstring[i:i+3]
+        if len(segment) < 3:
+            segment = segment.ljust(3, '0')  # Pad with zeros if needed
+        r = gray_to_int(segment)
         rstr.append(r)
     return rstr
 
 def convert_cell(cell_bit_string):
     """
     Convert a cell bit-string to genome representation.
+
+    Args:
+        cell_bit_string (str): Bit-string representing a cell.
+
+    Returns:
+        list: Nested list representing the cell structure.
     """
-    tmp = [cell_bit_string[i:i + 3] for i in range(0, len(cell_bit_string), 3)]
-    return [tmp[i:i + 3] for i in range(0, len(tmp), 3)]
+    units = [cell_bit_string[i:i + 9] for i in range(0, len(cell_bit_string), 9)]
+    cell = []
+    for unit in units:
+        unit_blocks = [unit[j:j + 3] for j in range(0, 9, 3)]
+        cell.append(unit_blocks)
+    return cell
 
 def convert(bit_string):
     """
     Convert the network bit-string to genome representation for three branches.
+
+    Args:
+        bit_string (str): Full bit-string representing the network.
+
+    Returns:
+        list: List containing genome representations for each branch.
     """
     third = len(bit_string) // 3
     b1 = convert_cell(bit_string[:third])
@@ -63,31 +92,32 @@ def convert(bit_string):
 def decode(genome):
     """
     Decode the genome into a Genotype with three branches.
+
+    Args:
+        genome (list): Genome list representing the network architecture.
+
+    Returns:
+        Genotype: Namedtuple containing branches with operations.
     """
-    genotype = genome.copy()
-    channels = genome.pop(0)
+    genome = genome.copy()
+    channels_idx = genome.pop(0)
+    channels_value = CHANNELS[channels_idx % len(CHANNELS)]
     genotype = convert(genome)
-    b1 = genotype[0]
-    b2 = genotype[1]
-    b3 = genotype[2]
+    branches = []
 
-    branch1 = [('channels', CHANNELS[channels])]
-    branch2 = [('channels', CHANNELS[channels])]
-    branch3 = [('channels', CHANNELS[channels])]
+    for branch in genotype:
+        branch_layers = [('channels', channels_value)]
+        for block in branch:
+            for unit in block:
+                unit_values = bstr_to_rstr(''.join(unit))
+                op_idx = unit_values[0] % len(PRIMITIVES)
+                k_idx = unit_values[1] % len(KERNEL_SIZES)
+                repeat_idx = unit_values[2] % len(REPEAT)
+                branch_layers.append(
+                    (PRIMITIVES[op_idx],
+                     [KERNEL_SIZES[k_idx], KERNEL_SIZES[k_idx]],
+                     REPEAT[repeat_idx])
+                )
+        branches.append(branch_layers)
 
-    for block in b1:
-        for unit in block:
-            unit = bstr_to_rstr(''.join(unit))
-            branch1.append((PRIMITIVES[unit[0]], [K[unit[1]], K[unit[1]]], REPEAT[unit[2]]))
-
-    for block in b2:
-        for unit in block:
-            unit = bstr_to_rstr(''.join(unit))
-            branch2.append((PRIMITIVES[unit[0]], [K[unit[1]], K[unit[1]]], REPEAT[unit[2]]))
-
-    for block in b3:
-        for unit in block:
-            unit = bstr_to_rstr(''.join(unit))
-            branch3.append((PRIMITIVES[unit[0]], [K[unit[1]], K[unit[1]]], REPEAT[unit[2]]))
-
-    return Genotype(Branch1=branch1, Branch2=branch2, Branch3=branch3)
+    return Genotype(Branch1=branches[0], Branch2=branches[1], Branch3=branches[2])
