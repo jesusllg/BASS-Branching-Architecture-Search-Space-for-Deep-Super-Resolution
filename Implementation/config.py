@@ -5,25 +5,29 @@ import random
 import tensorflow as tf
 
 # Set random seeds for reproducibility
-SEED = 42
+SEED = 1
 random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# Evaluation metric: 'PSNR' or 'SynFlow'
-EVALUATION_METRIC = 'PSNR'  # Change to 'SynFlow' as needed
+# Dataset Parameters
+batch_size = 64
+ratio = 2
+patch_size = 64
+overlap = 0.1
 
-# Dataset Configuration
-# Replace with your actual datasets
-# Placeholder datasets (replace with actual data loaders)
-train_images = np.random.rand(1000, 64, 64, 3).astype(np.float32)
-train_labels = np.random.rand(1000, 64, 64, 3).astype(np.float32)
-val_images = np.random.rand(200, 64, 64, 3).astype(np.float32)
-val_labels = np.random.rand(200, 64, 64, 3).astype(np.float32)
+# Dataset Directories
+directory1 = 'DIV2K_train_HR'
+directory2 = 'DIV2K_valid_HR'
 
-DATASET_TRAIN = tf.data.Dataset.from_tensor_slices((train_images, train_labels)).batch(32)
-DATASET_VAL = tf.data.Dataset.from_tensor_slices((val_images, val_labels)).batch(32)
-EPOCHS = 25  # Number of epochs for training when using PSNR
+# Model Training Parameters
+EPOCHS = 5
+learning_rate = 3e-04
+epsilon = 1e-07
+weight_decay = 1e-8
+
+# Evaluation Metric
+EVALUATION_METRIC = 'SynFlow'  # Change to 'PSNR' if needed
 
 # Device Configuration
 DEVICE = '/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'
