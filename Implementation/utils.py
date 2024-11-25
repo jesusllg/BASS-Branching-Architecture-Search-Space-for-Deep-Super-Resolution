@@ -1,48 +1,34 @@
 # utils.py
 
-import numpy as np
 import tensorflow as tf
 
-def soft_pareto_dominates(obj1, obj2):
+def psnr(y_true, y_pred):
     """
-    Soft Pareto dominance: obj1 dominates obj2 if it's better in at least one objective and not worse in others.
-    """
-    better_in_any = False
-    for a, b in zip(obj1, obj2):
-        if a < b:
-            better_in_any = True
-        elif a > b:
-            return False
-    return better_in_any
-
-def psnr(orig, pred):
-    """
-    Calculate the PSNR (Peak Signal-to-Noise Ratio) between the original and predicted images.
+    Calculate the PSNR (Peak Signal-to-Noise Ratio) between the true and predicted images.
 
     Args:
-        orig (Tensor): Original images tensor.
-        pred (Tensor): Predicted images tensor.
+        y_true (Tensor): Original images tensor.
+        y_pred (Tensor): Predicted images tensor.
 
     Returns:
         Tensor: PSNR value.
     """
-    # Scale and cast the target images to integer
-    orig = tf.cast(orig * 255.0, tf.uint8)
-    # Scale and cast the predicted images to integer
-    pred = tf.cast(pred * 255.0, tf.uint8)
+    # Scale and cast the images to uint8
+    y_true = tf.cast(y_true * 255.0, tf.uint8)
+    y_pred = tf.cast(y_pred * 255.0, tf.uint8)
     # Return the PSNR
-    return tf.image.psnr(orig, pred, max_val=255)
+    return tf.image.psnr(y_true, y_pred, max_val=255)
 
 def Dominance(a_f, b_f):
     """
     Determine the Pareto dominance relationship between two solutions.
 
     Args:
-        a_f: Objective values of solution a.
-        b_f: Objective values of solution b.
+        a_f (list): Objective values of solution a.
+        b_f (list): Objective values of solution b.
 
     Returns:
-        1 if a dominates b, -1 if b dominates a, 0 otherwise.
+        int: 1 if a dominates b, -1 if b dominates a, 0 otherwise.
     """
     a_dominates = False
     b_dominates = False
@@ -59,3 +45,4 @@ def Dominance(a_f, b_f):
         return -1
     else:
         return 0
+        
