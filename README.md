@@ -1,4 +1,4 @@
-# BASS: a Branching Architecture Search Space for Super-Resolution
+# BASS: Branching Architecture Search Space for Super-Resolution
 
 ## Introduction
 
@@ -41,7 +41,7 @@ This project focuses on discovering optimal neural architectures that balance mu
 ## Project Structure
 
 ```
-BASS-NSGA3/
+BASS/
 ├── config.py
 ├── encoding.py
 ├── evaluation.py
@@ -70,13 +70,13 @@ BASS-NSGA3/
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/BASS-NSGA3.git
+   git clone https://github.com/yourusername/BASS.git
    ```
 
 2. **Navigate to the project directory:**
 
    ```bash
-   cd BASS-NSGA3
+   cd BASS
    ```
 
 3. **Create a virtual environment (optional but recommended):**
@@ -101,12 +101,16 @@ BASS-NSGA3/
 Before running the algorithm, configure the settings in `config.py`:
 
 - **Random Seed**: Set `SEED` for reproducibility.
-- **Dataset Paths**: Update `directory1` and `directory2` with your dataset paths.
+- **Dataset Paths**: Update `DATASET_TRAIN` and `DATASET_VAL` with your dataset paths.
 - **Model Parameters**: Adjust `EPOCHS`, `learning_rate`, etc., as needed.
 - **Evaluation Metric**: Set `EVALUATION_METRIC` to `'PSNR'` or `'SynFlow'`.
 
 ```python
 # config.py
+
+import numpy as np
+import random
+import tensorflow as tf
 
 # Set random seeds for reproducibility
 SEED = 1
@@ -114,24 +118,21 @@ random.seed(SEED)
 np.random.seed(SEED)
 tf.random.set_seed(SEED)
 
-# Dataset Parameters
-batch_size = 64
-ratio = 2
-patch_size = 64
-overlap = 0.1
-
-# Dataset Directories
-directory1 = '/path/to/your/train_dataset'
-directory2 = '/path/to/your/validation_dataset'
-
-# Model Training Parameters
-EPOCHS = 5
-learning_rate = 3e-04
-epsilon = 1e-07
-weight_decay = 1e-8
-
 # Evaluation Metric
 EVALUATION_METRIC = 'SynFlow'  # Change to 'PSNR' if needed
+
+# NSGA-III Configuration
+NSGA3_CONFIG = {
+    'POP_SIZE': 100,       # Population size
+    'N_GEN': 100,          # Number of generations
+}
+
+# Dataset Configuration
+# Replace with your actual datasets
+DATASET_TRAIN = None  # Replace with your training dataset
+DATASET_VAL = None    # Replace with your validation dataset
+
+EPOCHS = 5  # Number of epochs for training when using PSNR
 
 # Device Configuration
 DEVICE = '/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'
@@ -155,7 +156,7 @@ An evolutionary algorithm designed for solving complex multi-objective optimizat
 
 - **Initialization**: Generates an initial population randomly.
 - **Selection**: Uses tournament selection based on Pareto dominance.
-- **Crossover and Mutation**: Applies two-point crossover and bit-flip mutation to generate offspring.
+- **Crossover and Mutation**: Applies k-point crossover and bit-flip mutation to generate offspring.
 - **Non-Dominated Sorting**: Ranks solutions into different fronts based on Pareto dominance.
 - **Reference Points**: Uses predefined reference points to guide the selection process for the next generation.
 
@@ -183,10 +184,40 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 ## Quick Links
 
-- [Project Repository](https://github.com/yourusername/BASS-NSGA3)
-- [Issues](https://github.com/yourusername/BASS-NSGA3/issues)
-- [Pull Requests](https://github.com/yourusername/BASS-NSGA3/pulls)
+- [Project Repository](https://github.com/yourusername/BASS)
+- [Issues](https://github.com/yourusername/BASS/issues)
+- [Pull Requests](https://github.com/yourusername/BASS/pulls)
 
 ---
 
 Thank you for your interest in this project!
+
+## Requirements
+
+Please ensure the following dependencies are installed before running the project:
+
+**requirements.txt**
+
+```
+numpy
+tensorflow
+tqdm
+```
+
+**Note**: Depending on your system and specific versions of TensorFlow and other packages, you may need to specify version numbers. For example:
+
+```
+numpy>=1.18.0
+tensorflow>=2.4.0
+tqdm>=4.50.0
+```
+
+To install the requirements, run:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+Feel free to reach out if you have any questions or need assistance setting up the project.
