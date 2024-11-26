@@ -178,23 +178,7 @@ Contributions are welcome! Please follow these steps:
 
 Please ensure your code adheres to the project's coding standards and includes proper documentation.
 
-## License
-
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
-## Quick Links
-
-- [Project Repository](https://github.com/yourusername/BASS)
-- [Issues](https://github.com/yourusername/BASS/issues)
-- [Pull Requests](https://github.com/yourusername/BASS/pulls)
-
----
-
-Thank you for your interest in this project!
-
-## Requirements
-
-Please ensure the following dependencies are installed before running the project:
+Ensure the following dependencies are installed before running the project:
 
 **requirements.txt**
 
