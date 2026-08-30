@@ -1,207 +1,205 @@
-# BASS: Branching Architecture Search Space for Super-Resolution
+# BASS: Branching Architecture Search Space for Deep Super-Resolution
 
-## Introduction
+BASS is a TensorFlow/Keras search space for single-image super-resolution. It
+keeps the original three-branch topology, repairs the runnable V1 baseline, and
+adds a backward-compatible V2 genome in which every searchable unit can choose
+either convolution or attention.
 
-The objective of this repository is to provide a platform for users to utilize our search space, known as **BASS** (Branching Architecture Search Space), dedicated to the automatic design of neural network architectures for super-resolution image restoration. We employ **Multi-Depth Branch Networks** as the foundation for this search space over which a multi-objective optimization process is used to design effective architectures.
+The design goal of V2 is **hybrid, free branches**: the branches do not receive
+fixed roles such as “local”, “global”, or “hybrid”. Each of their three units is
+searched independently, so evolution can discover homogeneous or mixed
+branches.
 
-This project focuses on discovering optimal neural architectures that balance multiple objectives:
+## Architecture
 
-- **Performance**: Measured by PSNR (Peak Signal-to-Noise Ratio) or SynFlow.
-- **Model Complexity**: The number of parameters in the model.
-- **Computational Cost**: Measured in FLOPs (Floating Point Operations).
-
-## Features
-
-- **Branching Architecture Search Space (BASS)**: A flexible framework for defining complex neural network architectures.
-- **NSGA-III Algorithm**: Utilizes NSGA-III for multi-objective optimization to find Pareto-optimal architectures.
-- **Multi-Objective Evaluation**: Supports evaluation based on PSNR, SynFlow, parameter count, and FLOPs.
-- **Dynamic Model Construction**: Automatically builds Keras models from encoded genotypes.
-- **Reproducibility**: Configurable random seeds for consistent results.
-
-## How It Works
-
-### Encoding and Decoding
-
-- **Genome Representation**: Architectures are represented as bitstrings (genomes), encoding the choices of operations, kernel sizes, channels, and repeats.
-- **Encoding**: The `encoding.py` module handles the conversion of bitstrings into structured genotypes, which define the architecture of each branch.
-- **Decoding**: Genotypes are decoded to build actual TensorFlow/Keras models using the `model_builder.py` module.
-
-### Model Building
-
-- **Branching Structure**: Each model consists of three branches, each defined by its genotype.
-- **Layer Primitives**: The `PRIMITIVES` list defines available operations, such as convolutions, dilated convolutions, depthwise separable convolutions, and more.
-- **Dynamic Construction**: The `get_model` function constructs the model by iterating over the genotype and adding layers accordingly.
-
-### Evaluation Metrics
-
-- **PSNR (Peak Signal-to-Noise Ratio)**: Measures the quality of reconstructed images in super-resolution tasks.
-- **SynFlow**: A proxy metric for evaluating neural network architectures without full training, focusing on network connectivity.
-- **FLOPs and Parameters**: Computational cost is measured using FLOPs, and model complexity is assessed by counting the number of parameters.
-
-## Project Structure
-
-```
-BASS/
-├── config.py
-├── encoding.py
-├── evaluation.py
-├── model_builder.py
-├── nsga3.py
-├── utils.py
-├── main.py
-├── README.md
-├── LICENSE
-└── requirements.txt
+```mermaid
+flowchart TB
+    LR["Low-resolution image"] --> Stem["3×3 stem"]
+    Stem --> B1["Branch 1: 3 free units"]
+    Stem --> B2["Branch 2: 3 free units"]
+    Stem --> B3["Branch 3: 3 free units"]
+    B1 --> Add["Element-wise addition"]
+    B2 --> Add
+    B3 --> Add
+    Add --> PS["Reconstruction + PixelShuffle"]
+    PS --> SR["Super-resolved image"]
 ```
 
-- **config.py**: Configuration settings for the project, including dataset paths and hyperparameters.
-- **encoding.py**: Functions for encoding and decoding genome representations.
-- **evaluation.py**: Evaluation functions for PSNR, SynFlow, FLOPs, and parameter counting.
-- **model_builder.py**: Functions to dynamically build Keras models from genotypes.
-- **nsga3.py**: Implementation of the NSGA-III algorithm.
-- **utils.py**: Utility functions, such as dominance checks.
-- **main.py**: Main script to run the NSGA-III optimization process.
-- **README.md**: This document.
-- **LICENSE**: License information.
-- **requirements.txt**: List of dependencies.
+All searchable operations preserve spatial size and channel count. This keeps
+the branch addition valid without hidden projections and supports arbitrary
+inference sizes. The reconstruction layer derives its channel count from the
+requested scale, so `×2`, `×3`, and `×4` are supported correctly.
+
+## Which attention is used?
+
+BASS V2 deliberately does not use full global spatial self-attention. That
+operation scales quadratically with the number of pixels and becomes expensive
+at super-resolution feature-map sizes. Instead, the search space includes:
+
+| Primitive | Context | Search argument | Purpose |
+|---|---|---:|---|
+| `channel_attention` | Global spatial pooling, channel gating | none | Cheap global channel context |
+| `window_attention` | Local self-attention | window `4` or `8` | Texture and structure inside a window |
+| `shifted_window_attention` | Shifted local self-attention | window `4` or `8` | Communication across window boundaries |
+| `hybrid_conv_attention` | Depthwise convolution + window attention | window `4` or `8` | Local inductive bias and contextual mixing in one residual block |
+
+Shifted attention applies both a region mask and a padding mask. Inputs whose
+height or width is not divisible by the window are padded internally and cropped
+back to the original size. Repeated hybrid blocks alternate regular and shifted
+windows.
+
+The CNN family remains available:
+
+- standard convolution;
+- dilated convolution with rates 2, 3, or 4;
+- depthwise-separable convolution;
+- expansion-2 inverted bottleneck;
+- transposed convolution;
+- identity.
+
+## Versioned genomes
+
+| Version | Length | Layout | Compatibility |
+|---|---:|---|---|
+| V1 | 84 bits | `3 channel bits + 9 × (op 3 + kernel 3 + repeat 3)` | Original CNN-only search space |
+| V2 | 93 bits | `3 channel bits + 9 × (family 1 + op 3 + arg 3 + repeat 3)` | CNN + attention |
+
+Both versions use Gray decoding for multi-bit fields. A canonical immutable
+`ArchitectureSpec` is the boundary between the genome, model builder,
+evaluation, and optimizer. Deterministic repair removes aliases such as repeated
+identity blocks, and canonical JSON plus SHA-256 hashes make evaluation caching
+reliable.
+
+An old chromosome can be migrated without changing its network phenotype:
+
+```python
+from bass import encode_v2_bits, upgrade_v1
+
+old_bits = [0] * 84
+v2_spec = upgrade_v1(old_bits)
+v2_bits = encode_v2_bits(v2_spec)
+```
 
 ## Installation
 
-1. **Clone the repository:**
+Python 3.10 or newer is required.
 
-   ```bash
-   git clone https://github.com/yourusername/BASS.git
-   ```
+```bash
+git clone https://github.com/jesusllg/BASS-Branching-Architecture-Search-Space-for-Deep-Super-Resolution.git
+cd BASS-Branching-Architecture-Search-Space-for-Deep-Super-Resolution
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-2. **Navigate to the project directory:**
+For tests:
 
-   ```bash
-   cd BASS
-   ```
+```bash
+python -m pip install -e ".[dev]"
+pytest
+```
 
-3. **Create a virtual environment (optional but recommended):**
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-4. **Install the required dependencies:**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-   Ensure you have TensorFlow, NumPy, and other necessary libraries installed.
-
-## Usage
-
-### Configuration
-
-Before running the algorithm, configure the settings in `config.py`:
-
-- **Random Seed**: Set `SEED` for reproducibility.
-- **Dataset Paths**: Update `DATASET_TRAIN` and `DATASET_VAL` with your dataset paths.
-- **Model Parameters**: Adjust `EPOCHS`, `learning_rate`, etc., as needed.
-- **Evaluation Metric**: Set `EVALUATION_METRIC` to `'PSNR'` or `'SynFlow'`.
+## Build an architecture
 
 ```python
-# config.py
-
-import numpy as np
-import random
 import tensorflow as tf
 
-# Set random seeds for reproducibility
-SEED = 1
-random.seed(SEED)
-np.random.seed(SEED)
-tf.random.set_seed(SEED)
+from bass import sample_v2
+from bass.model_builder import build_model
 
-# Evaluation Metric
-EVALUATION_METRIC = 'SynFlow'  # Change to 'PSNR' if needed
+architecture = sample_v2(seed=42, attention_probability=0.5)
+model = build_model(architecture, upscale_factor=4)
 
-# NSGA-III Configuration
-NSGA3_CONFIG = {
-    'POP_SIZE': 100,       # Population size
-    'N_GEN': 100,          # Number of generations
-}
-
-# Dataset Configuration
-# Replace with your actual datasets
-DATASET_TRAIN = None  # Replace with your training dataset
-DATASET_VAL = None    # Replace with your validation dataset
-
-EPOCHS = 5  # Number of epochs for training when using PSNR
-
-# Device Configuration
-DEVICE = '/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'
+lr = tf.random.uniform((1, 31, 47, 3))
+sr = model(lr, training=False)
+assert sr.shape == (1, 124, 188, 3)
 ```
 
-### Running the Algorithm
+`build_model(..., return_feature_model=True)` also exposes exactly nine stable
+feature taps—one after each searchable unit—for future zero-cost proxies.
 
-Use `main.py` to execute the NSGA-III optimization process.
+## Run the repaired search
+
+The command below runs the original V1 space with the deterministic SynFlow-style
+baseline, parameter count, and FLOPs as minimization objectives:
 
 ```bash
-python main.py
+bass-search --genome-version 1 --population 20 --generations 10
 ```
 
-After running, the script will output the final population and non-dominated solutions based on the defined objectives.
-
-## Algorithm Implemented
-
-### NSGA-III
-
-An evolutionary algorithm designed for solving complex multi-objective optimization problems. NSGA-III uses reference points to maintain diversity and spread among the solutions.
-
-- **Initialization**: Generates an initial population randomly.
-- **Selection**: Uses tournament selection based on Pareto dominance.
-- **Crossover and Mutation**: Applies k-point crossover and bit-flip mutation to generate offspring.
-- **Non-Dominated Sorting**: Ranks solutions into different fronts based on Pareto dominance.
-- **Reference Points**: Uses predefined reference points to guide the selection process for the next generation.
-
-## Research Publications
-
-This project is part of ongoing research in neural architecture search and multi-objective optimization. It contributes to the field by integrating a flexible search space with advanced optimization algorithms.
-
-**Note**: Please add any relevant publications or research articles if available.
-
-## Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. **Fork the repository**.
-2. **Create a new branch** for your feature or bug fix.
-3. **Commit your changes** with clear messages.
-4. **Push to your fork**.
-5. **Submit a pull request**.
-
-Please ensure your code adheres to the project's coding standards and includes proper documentation.
-
-Ensure the following dependencies are installed before running the project:
-
-**requirements.txt**
-
-```
-numpy
-tensorflow
-tqdm
-```
-
-**Note**: Depending on your system and specific versions of TensorFlow and other packages, you may need to specify version numbers. For example:
-
-```
-numpy>=1.18.0
-tensorflow>=2.4.0
-tqdm>=4.50.0
-```
-
-To install the requirements, run:
+Search the hybrid V2 space with:
 
 ```bash
-pip install -r requirements.txt
+bass-search --genome-version 2 --population 20 --generations 10
 ```
 
----
+For a quick CPU smoke test:
 
-Feel free to reach out if you have any questions or need assistance setting up the project.
+```bash
+bass-search --genome-version 2 --population 4 --generations 1 \
+  --input-size 16 --skip-flops
+```
+
+The repaired optimizer provides seeded initialization, tournament selection,
+two-point crossover, bit mutation, non-dominated sorting, reference directions,
+and NSGA-III niching. Real model evaluations are cached by canonical phenotype,
+so different bit aliases do not rebuild the same network.
+
+The historical launcher remains available:
+
+```bash
+python Implementation/main.py --genome-version 1 \
+  --population 4 --generations 1 --input-size 16 --skip-flops
+```
+
+## Evaluation API
+
+`evaluate_architecture` returns the quality score, parameters, FLOPs, and metric
+metadata. The search minimizes `[-score, parameters, FLOPs]`.
+
+```python
+from bass import sample_v2
+from bass.evaluation import evaluate_architecture
+
+result = evaluate_architecture(
+    sample_v2(seed=7),
+    metric="synflow",
+    input_shape=(32, 32, 3),
+)
+print(result.score, result.params, result.flops)
+```
+
+PSNR evaluation is also supported through the Python API when both training and
+validation datasets are supplied. Images are expected in `[0, 1]`.
+
+## Project layout
+
+```text
+src/bass/
+├── blocks/attention.py   # channel, window, shifted, and hybrid attention
+├── encoding.py           # V1/V2 codecs and migration
+├── evaluation.py         # SynFlow-style baseline, PSNR, SSIM, params, FLOPs
+├── genotype.py           # canonical architecture schema
+├── model_builder.py      # three-branch Keras model
+├── nsga3.py              # repaired multi-objective optimizer
+├── problem.py            # cached search-problem adapter
+├── registry.py           # operation-to-layer registry
+└── repair.py             # deterministic canonical repair
+
+Implementation/           # compatibility entry points for the original layout
+tests/                    # codec, model, serialization, gradient, and optimizer tests
+```
+
+## Current scope
+
+- SynFlow-style gradient flow is a stable baseline, not an implementation of
+  AZ-NAS/AZ-SR.
+- FLOPs are profiled for the input shape supplied to the evaluator.
+- Dataset loading and benchmark training recipes are intentionally not hard-coded;
+  PSNR experiments must provide explicit `tf.data.Dataset` objects.
+- The repository implements the search space and optimizer plumbing; it does not
+  ship pretrained models or claim benchmark results.
+
+Pull requests should include tests for changes to codecs, tensor shapes,
+serialization, or search behavior.
