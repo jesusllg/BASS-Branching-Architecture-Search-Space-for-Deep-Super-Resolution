@@ -21,7 +21,7 @@ jobs:
         env:
           CUDA_VISIBLE_DEVICES: ""
           TF_CPP_MIN_LOG_LEVEL: "2"
-        run: pytest -W error
+        run: python -m pytest -W error
       - name: Lint and format check
         run: |
           ruff check .

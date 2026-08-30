@@ -97,7 +97,7 @@ For tests:
 
 ```bash
 python -m pip install -e ".[dev]"
-pytest
+python -m pytest
 ```
 
 ## Build an architecture
