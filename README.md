@@ -153,6 +153,31 @@ python Implementation/main.py --genome-version 1 \
   --population 4 --generations 1 --input-size 16 --skip-flops
 ```
 
+## Where the new V2 code lives
+
+The installable implementation is under `src/bass/`. The files in
+`Implementation/` are compatibility wrappers for scripts written against the
+original repository; new development should target `src/bass/`.
+
+| What you want to inspect or change | Location |
+|---|---|
+| Channel, window, shifted-window, and hybrid attention | `src/bass/blocks/attention.py` |
+| V1/V2 genome decoding, V1 migration, and V2 sampling | `src/bass/encoding.py` |
+| Canonical architecture and block representation | `src/bass/genotype.py` |
+| Deterministic genotype canonicalization | `src/bass/repair.py` |
+| CNN/attention operation registry | `src/bass/registry.py` |
+| Three-branch network, feature taps, and PixelShuffle | `src/bass/model_builder.py` |
+| SynFlow-style baseline, PSNR/SSIM, parameters, and FLOPs | `src/bass/evaluation.py` |
+| Cached multi-objective problem | `src/bass/problem.py` |
+| Repaired NSGA-III search | `src/bass/nsga3.py` |
+| Command-line entry point | `src/bass/cli.py` |
+| V1 compatibility entry points | `Implementation/` |
+| Regression and V2 behavior tests | `tests/` |
+
+The shortest reading path is: `genotype.py` → `encoding.py` → `registry.py` →
+`model_builder.py`. For attention internals, go directly to
+`blocks/attention.py`; for running a search, start at `cli.py`.
+
 ## Evaluation API
 
 `evaluate_architecture` returns the quality score, parameters, FLOPs, and metric
