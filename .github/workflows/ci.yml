@@ -26,3 +26,5 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
+      - name: Build distribution
+        run: python -m build

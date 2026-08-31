@@ -7,9 +7,9 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from bass import config as _config
-from bass.encoding import *
-from bass.genotype import ArchitectureSpec
+from bass.v1 import config as _config
+from bass.v1.encoding import *
+from bass.v1.genotype import ArchitectureSpec
 
 CHANNELS = list(_config.CHANNELS)
 KERNEL_SIZES = list(_config.KERNEL_SIZES)

@@ -7,7 +7,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from bass.evaluation import psnr  # noqa: F401
+from bass.v1.evaluation import psnr  # noqa: F401
 
 
 def Dominance(a_f, b_f):
