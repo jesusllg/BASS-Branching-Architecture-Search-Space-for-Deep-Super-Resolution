@@ -1,6 +1,6 @@
-"""Custom Keras blocks used by the hybrid BASS search space."""
+"""Compatibility exports for attention blocks now owned by BASS V2."""
 
-from .attention import (
+from bass.v2.blocks import (
     ChannelAttentionBlock,
     HybridConvAttentionBlock,
     WindowAttentionBlock,

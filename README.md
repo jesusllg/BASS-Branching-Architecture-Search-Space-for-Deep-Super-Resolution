@@ -1,86 +1,58 @@
 # BASS: Branching Architecture Search Space for Deep Super-Resolution
 
-BASS is a TensorFlow/Keras search space for single-image super-resolution. It
-keeps the original three-branch topology, repairs the runnable V1 baseline, and
-adds a backward-compatible V2 genome in which every searchable unit can choose
-either convolution or attention.
+BASS now contains two deliberately separate search spaces in the same package:
 
-The design goal of V2 is **hybrid, free branches**: the branches do not receive
-fixed roles such as “local”, “global”, or “hybrid”. Each of their three units is
-searched independently, so evolution can discover homogeneous or mixed
-branches.
+| Version | Python namespace | Genome | Searchable units | Status |
+|---|---|---:|---|---|
+| BASS V1 | `bass.v1` | 84 bits | CNN only | Frozen, repaired baseline |
+| BASS V2 | `bass.v2` | 10 semantic integers | CNN or attention per unit | Structurally audited; experiments gated |
 
-## Architecture
+V1 does not import V2 or any attention implementation. V2 owns its genotype,
+codec, repair rules, registry, model builder, evaluator, and optimization
+problem. Shared search machinery lives in `bass.shared`. See
+[`docs/VERSIONS.md`](docs/VERSIONS.md) for the boundary and
+[`docs/V2_AUDIT_RESPONSE.md`](docs/V2_AUDIT_RESPONSE.md) for the scientific
+readiness decision.
+
+## The architecture decision
+
+Both versions keep the original macro-topology: three parallel branches with
+three searchable units per branch. The branches are not assigned fixed
+"local", "global", or "hybrid" roles.
 
 ```mermaid
 flowchart TB
     LR["Low-resolution image"] --> Stem["3×3 stem"]
-    Stem --> B1["Branch 1: 3 free units"]
-    Stem --> B2["Branch 2: 3 free units"]
-    Stem --> B3["Branch 3: 3 free units"]
+    Stem --> B1["Branch 1: 3 searched units"]
+    Stem --> B2["Branch 2: 3 searched units"]
+    Stem --> B3["Branch 3: 3 searched units"]
     B1 --> Add["Element-wise addition"]
     B2 --> Add
     B3 --> Add
-    Add --> PS["Reconstruction + PixelShuffle"]
-    PS --> SR["Super-resolved image"]
+    Add --> Up["Linear reconstruction + PixelShuffle"]
+    Up --> Residual["Residual + bicubic LR"]
+    Residual --> SR["Super-resolved image"]
 ```
 
-All searchable operations preserve spatial size and channel count. This keeps
-the branch addition valid without hidden projections and supports arbitrary
-inference sizes. The reconstruction layer derives its channel count from the
-requested scale, so `×2`, `×3`, and `×4` are supported correctly.
+In V1 every unit is convolutional. In V2 each of the nine slots independently
+chooses skip or one of 14 complete primitive configurations. Seven are residual
+CNN configurations and seven are residual attention configurations. Attention
+is optional, and the branches have no predetermined local/global roles.
 
-## Which attention is used?
+V2 avoids full global spatial self-attention because its cost is quadratic in
+the number of pixels. It searches these alternatives:
 
-BASS V2 deliberately does not use full global spatial self-attention. That
-operation scales quadratically with the number of pixels and becomes expensive
-at super-resolution feature-map sizes. Instead, the search space includes:
+| V2 primitive | Context | Search argument |
+|---|---|---:|
+| `channel_attention_residual` | Global pooling gates a signed residual delta | none |
+| `window_transformer` | Local self-attention with convolutional position encoding | window 4 or 8 |
+| `regular_shifted_pair` | Guaranteed regular/shifted cross-window exchange | window 4 or 8 |
+| `hybrid_conv_window` | Depthwise local path plus window attention | window 4 or 8 |
 
-| Primitive | Context | Search argument | Purpose |
-|---|---|---:|---|
-| `channel_attention` | Global spatial pooling, channel gating | none | Cheap global channel context |
-| `window_attention` | Local self-attention | window `4` or `8` | Texture and structure inside a window |
-| `shifted_window_attention` | Shifted local self-attention | window `4` or `8` | Communication across window boundaries |
-| `hybrid_conv_attention` | Depthwise convolution + window attention | window `4` or `8` | Local inductive bias and contextual mixing in one residual block |
+Shifted windows include region and padding masks. Non-divisible inputs are
+padded internally and cropped back.
 
-Shifted attention applies both a region mask and a padding mask. Inputs whose
-height or width is not divisible by the window are padded internally and cropped
-back to the original size. Repeated hybrid blocks alternate regular and shifted
-windows.
-
-The CNN family remains available:
-
-- standard convolution;
-- dilated convolution with rates 2, 3, or 4;
-- depthwise-separable convolution;
-- expansion-2 inverted bottleneck;
-- transposed convolution;
-- identity.
-
-## Versioned genomes
-
-| Version | Length | Layout | Compatibility |
-|---|---:|---|---|
-| V1 | 84 bits | `3 channel bits + 9 × (op 3 + kernel 3 + repeat 3)` | Original CNN-only search space |
-| V2 | 93 bits | `3 channel bits + 9 × (family 1 + op 3 + arg 3 + repeat 3)` | CNN + attention |
-
-Both versions use Gray decoding for multi-bit fields. A canonical immutable
-`ArchitectureSpec` is the boundary between the genome, model builder,
-evaluation, and optimizer. Deterministic repair removes aliases such as repeated
-identity blocks, and canonical JSON plus SHA-256 hashes make evaluation caching
-reliable.
-
-An old chromosome can be migrated without changing its network phenotype:
-
-```python
-from bass import encode_v2_bits, upgrade_v1
-
-old_bits = [0] * 84
-v2_spec = upgrade_v1(old_bits)
-v2_bits = encode_v2_bits(v2_spec)
-```
-
-## Installation
+## Install
 
 Python 3.10 or newer is required.
 
@@ -93,44 +65,61 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-For tests:
+For development:
 
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest
+ruff check .
+ruff format --check .
 ```
 
-## Build an architecture
+## Use V1 without attention
 
 ```python
 import tensorflow as tf
 
-from bass import sample_v2
-from bass.model_builder import build_model
+from bass import v1
 
-architecture = sample_v2(seed=42, attention_probability=0.5)
-model = build_model(architecture, upscale_factor=4)
+architecture = v1.decode([0] * 84)
+model = v1.build_model(architecture, upscale_factor=2)
+sr = model(tf.zeros((1, 16, 16, 3)), training=False)
+assert sr.shape == (1, 32, 32, 3)
+```
 
-lr = tf.random.uniform((1, 31, 47, 3))
-sr = model(lr, training=False)
+This path stays entirely inside `src/bass/v1/`.
+
+## Use V2 with optional attention
+
+```python
+import tensorflow as tf
+
+from bass import v2
+
+architecture = v2.sample(seed=42, attention_probability=0.5)
+model = v2.build_model(architecture, upscale_factor=4)
+sr = model(tf.random.uniform((1, 31, 47, 3)), training=False)
 assert sr.shape == (1, 124, 188, 3)
 ```
 
-`build_model(..., return_feature_model=True)` also exposes exactly nine stable
-feature taps—one after each searchable unit—for future zero-cost proxies.
+Set `attention_probability=0.0` for a CNN-only V2 sample, `1.0` for an
+attention-only sample, or an intermediate value for free mixtures. During NAS,
+the optimizer stores one channel ID plus nine complete state IDs. Skips are
+packed, equivalent repeat groupings are normalized, and the three symmetric
+branches are sorted before an individual can enter the population.
 
-## Run the repaired search
+`build_model(..., return_feature_model=True)` exposes nine stable feature taps,
+one after each searchable unit, in both versions.
 
-The command below runs the original V1 space with the deterministic SynFlow-style
-baseline, parameter count, and FLOPs as minimization objectives:
+## Run the search
+
+Use the same CLI with an explicit version:
 
 ```bash
+# Frozen 84-bit CNN-only space
 bass-search --genome-version 1 --population 20 --generations 10
-```
 
-Search the hybrid V2 space with:
-
-```bash
+# Canonical semantic optional-attention space
 bass-search --genome-version 2 --population 20 --generations 10
 ```
 
@@ -141,90 +130,139 @@ bass-search --genome-version 2 --population 4 --generations 1 \
   --input-size 16 --skip-flops
 ```
 
-The repaired optimizer provides seeded initialization, tournament selection,
-two-point crossover, bit mutation, non-dominated sorting, reference directions,
-and NSGA-III niching. Real model evaluations are cached by canonical phenotype,
-so different bit aliases do not rebuild the same network.
+V2 crosses complete branches and mutates complete semantic states. Duplicate
+canonical hashes are rejected rather than occupying population slots. The
+bundled algorithm is named `ReferenceDirectionEA`: it now uses Deb-Jain
+ideal/extreme/intercept normalization, but is not presented as externally
+validated NSGA-III until cross-validation is completed. Per-generation and
+cumulative duplicate rejection counts are exposed through `optimizer.history`.
 
-The historical launcher remains available:
+The historical entry point is intentionally V1-only:
 
 ```bash
-python Implementation/main.py --genome-version 1 \
-  --population 4 --generations 1 --input-size 16 --skip-flops
+python Implementation/main.py --population 4 --generations 1 \
+  --input-size 16 --skip-flops
 ```
 
-## Where the new V2 code lives
+`Implementation/` rejects V2 so old code cannot silently start searching a
+different space.
 
-The installable implementation is under `src/bass/`. The files in
-`Implementation/` are compatibility wrappers for scripts written against the
-original repository; new development should target `src/bass/`.
+## Migrate a V1 architecture to V2
 
-| What you want to inspect or change | Location |
-|---|---|
-| Channel, window, shifted-window, and hybrid attention | `src/bass/blocks/attention.py` |
-| V1/V2 genome decoding, V1 migration, and V2 sampling | `src/bass/encoding.py` |
-| Canonical architecture and block representation | `src/bass/genotype.py` |
-| Deterministic genotype canonicalization | `src/bass/repair.py` |
-| CNN/attention operation registry | `src/bass/registry.py` |
-| Three-branch network, feature taps, and PixelShuffle | `src/bass/model_builder.py` |
-| SynFlow-style baseline, PSNR/SSIM, parameters, and FLOPs | `src/bass/evaluation.py` |
-| Cached multi-objective problem | `src/bass/problem.py` |
-| Repaired NSGA-III search | `src/bass/nsga3.py` |
-| Command-line entry point | `src/bass/cli.py` |
-| V1 compatibility entry points | `Implementation/` |
-| Regression and V2 behavior tests | `tests/` |
+Migration is explicit and one-way. It preserves CNN-only status but is not
+phenotype-exact because the audited V2 catalog intentionally replaces V1
+operations with residual, cost-controlled counterparts:
 
-The shortest reading path is: `genotype.py` → `encoding.py` → `registry.py` →
-`model_builder.py`. For attention internals, go directly to
-`blocks/attention.py`; for running a search, start at `cli.py`.
+```python
+from bass import v1, v2
+
+v1_spec = v1.decode([0] * 84)
+v2_spec = v2.migrate_v1(v1_spec)
+v2_genome = v2.encode(v2_spec)
+
+assert v2_spec.schema_version == 2
+assert v2_spec.attention_fraction == 0.0
+assert len(v2_genome) == 10
+```
+
+Use V1 itself when exact V1 behavior is required. The retired 93-bit V2
+prototype remains inspectable through `bass.v2.legacy93`, but it is not a
+scientific optimizer input.
+
+## Where everything lives
+
+| Area | Location | Responsibility |
+|---|---|---|
+| V1 baseline | `src/bass/v1/` | Frozen CNN config, 84-bit codec, model, evaluation, problem |
+| V2 hybrid | `src/bass/v2/` | Semantic codec, strict schema, residual operations, model, evaluation, problem |
+| Retired V2 format | `src/bass/v2/legacy93.py` | Import/export only; never scientific search |
+| V2 blocks | `src/bass/v2/blocks/` | Residual CNN, channel, window, paired-shift, and hybrid blocks |
+| Shared optimizer | `src/bass/shared/nsga3.py` | Reference-direction EA with semantic hooks |
+| CLI routing | `src/bass/cli.py` | Selects V1 or V2 explicitly |
+| Compatibility facades | `src/bass/*.py` | Keeps imports from BASS 0.2 working |
+| Original layout | `Implementation/` | V1-only wrappers for historical scripts |
+| Version boundary tests | `tests/v1/`, `tests/v2/`, `tests/shared/` | Isolation, strict codecs, migration, routing |
+
+```text
+src/bass/
+├── v1/                     # independent CNN-only BASS
+│   ├── config.py
+│   ├── encoding.py
+│   ├── genotype.py
+│   ├── registry.py
+│   ├── model_builder.py
+│   ├── evaluation.py
+│   └── problem.py
+├── v2/                     # independent optional-attention BASS
+│   ├── blocks/attention.py
+│   ├── blocks/cnn.py
+│   ├── config.py
+│   ├── encoding.py
+│   ├── genotype.py
+│   ├── legacy93.py
+│   ├── repair.py
+│   ├── registry.py
+│   ├── model_builder.py
+│   ├── evaluation.py
+│   └── problem.py
+├── shared/nsga3.py         # version-neutral search engine
+├── cli.py                  # explicit version selector
+└── *.py                    # backward-compatible import facades
+
+Implementation/             # historical BASS V1 interface only
+tests/v1/                   # V1 isolation and contract tests
+tests/v2/                   # V2 attention and migration tests
+tests/shared/               # routing and shared infrastructure tests
+scripts/                    # 10k structural and 500-model validation gates
+```
+
+The shortest V1 reading path is `v1/genotype.py` → `v1/encoding.py` →
+`v1/registry.py` → `v1/model_builder.py`. For V2, follow the same path under
+`v2/` and then inspect `v2/blocks/attention.py`.
 
 ## Evaluation API
 
-`evaluate_architecture` returns the quality score, parameters, FLOPs, and metric
-metadata. The search minimizes `[-score, parameters, FLOPs]`.
+Each version exposes its own evaluator. The search minimizes
+`[-score, parameters, FLOPs]`.
 
 ```python
-from bass import sample_v2
-from bass.evaluation import evaluate_architecture
+from bass import v2
+from bass.v2.evaluation import evaluate_architecture
 
 result = evaluate_architecture(
-    sample_v2(seed=7),
-    metric="synflow",
+    v2.sample(seed=7),
+    metric="gradient_flow",
     input_shape=(32, 32, 3),
 )
 print(result.score, result.params, result.flops)
 ```
 
-PSNR evaluation is also supported through the Python API when both training and
-validation datasets are supplied. Images are expected in `[0, 1]`.
-
-## Project layout
-
-```text
-src/bass/
-├── blocks/attention.py   # channel, window, shifted, and hybrid attention
-├── encoding.py           # V1/V2 codecs and migration
-├── evaluation.py         # SynFlow-style baseline, PSNR, SSIM, params, FLOPs
-├── genotype.py           # canonical architecture schema
-├── model_builder.py      # three-branch Keras model
-├── nsga3.py              # repaired multi-objective optimizer
-├── problem.py            # cached search-problem adapter
-├── registry.py           # operation-to-layer registry
-└── repair.py             # deterministic canonical repair
-
-Implementation/           # compatibility entry points for the original layout
-tests/                    # codec, model, serialization, gradient, and optimizer tests
-```
+PSNR evaluation is available when training and validation `tf.data.Dataset`
+objects are supplied. Images are expected in `[0, 1]`.
 
 ## Current scope
 
-- SynFlow-style gradient flow is a stable baseline, not an implementation of
-  AZ-NAS/AZ-SR.
-- FLOPs are profiled for the input shape supplied to the evaluator.
-- Dataset loading and benchmark training recipes are intentionally not hard-coded;
-  PSNR experiments must provide explicit `tf.data.Dataset` objects.
-- The repository implements the search space and optimizer plumbing; it does not
-  ship pretrained models or claim benchmark results.
+- V2 calls its bundled proxy `gradient_flow`; it is not canonical SynFlow or
+  AZ-NAS/AZ-SR, and disconnected/non-finite gradients fail explicitly.
+- Full NAS remains gated on family-balanced proxy calibration and short-training
+  rank validation; executable code is not treated as scientific validation.
+- FLOPs are profiled for the evaluator's supplied input shape.
+- Dataset loading and benchmark training recipes are not hard-coded.
+- The repository contains search spaces and optimizer plumbing, not pretrained
+  models or benchmark claims.
 
-Pull requests should include tests for changes to codecs, tensor shapes,
-serialization, or search behavior.
+Run the implemented structural and executable audit harnesses explicitly:
+
+```bash
+python scripts/audit_v2_space.py --samples 10000 \
+  --output v2-structural-audit.json
+python scripts/validate_v2_models.py --samples 500 \
+  --output v2-executable-validation.json
+```
+
+The second command is intentionally outside the ordinary unit suite because it
+builds and differentiates 500 family-stratified models. Passing it still does
+not replace proxy calibration or short-training PSNR rank validation.
+
+Pull requests should include tests for codecs, tensor shapes, serialization,
+version boundaries, or search behavior affected by the change.

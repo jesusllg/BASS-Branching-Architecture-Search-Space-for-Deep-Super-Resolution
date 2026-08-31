@@ -1,42 +1,37 @@
-"""Stable search-space constants shared by both genotype versions."""
+"""Compatibility constants; new code should import ``bass.v1`` or ``bass.v2``."""
 
-CNN_PRIMITIVES = (
-    "conv",
-    "dil_conv_d2",
-    "dil_conv_d3",
-    "dil_conv_d4",
-    "depthwise_separable_conv",
-    "inverted_bottleneck_e2",
-    "conv_transpose",
-    "identity",
+from .v1.config import (
+    BRANCH_COUNT,
+    CHANNELS,
+    CNN_PRIMITIVES,
+    DEFAULT_INPUT_CHANNELS,
+    DEFAULT_SEED,
+    DEFAULT_UPSCALE,
+    KERNEL_SIZES,
+    REPEATS,
+    UNITS_PER_BRANCH,
 )
+from .v1.config import DECODED_VALUES as V1_DECODED_VALUES
+from .v1.config import GENOME_BITS as V1_GENOME_BITS
+from .v2.config import ATTENTION_PRIMITIVES, HEADS_BY_CHANNELS, WINDOW_SIZES
+from .v2.config import LEGACY_GENOME_BITS as V2_GENOME_BITS
+from .v2.config import SEMANTIC_GENOME_LENGTH as V2_SEMANTIC_GENOME_LENGTH
 
-ATTENTION_PRIMITIVES = (
-    "channel_attention",
-    "window_attention",
-    "shifted_window_attention",
-    "hybrid_conv_attention",
-)
-
-CHANNELS = (16, 32, 48, 64)
-KERNEL_SIZES = (1, 3, 5, 7)
-REPEATS = (1, 2, 3, 4)
-WINDOW_SIZES = (4, 8)
-
-BRANCH_COUNT = 3
-UNITS_PER_BRANCH = 3
-
-V1_GENOME_BITS = 84
-V1_DECODED_VALUES = 28
-V2_GENOME_BITS = 93
-
-HEADS_BY_CHANNELS = {
-    16: 2,
-    32: 4,
-    48: 4,
-    64: 8,
-}
-
-DEFAULT_UPSCALE = 2
-DEFAULT_INPUT_CHANNELS = 3
-DEFAULT_SEED = 42
+__all__ = [
+    "ATTENTION_PRIMITIVES",
+    "BRANCH_COUNT",
+    "CHANNELS",
+    "CNN_PRIMITIVES",
+    "DEFAULT_INPUT_CHANNELS",
+    "DEFAULT_SEED",
+    "DEFAULT_UPSCALE",
+    "HEADS_BY_CHANNELS",
+    "KERNEL_SIZES",
+    "REPEATS",
+    "UNITS_PER_BRANCH",
+    "V1_DECODED_VALUES",
+    "V1_GENOME_BITS",
+    "V2_GENOME_BITS",
+    "V2_SEMANTIC_GENOME_LENGTH",
+    "WINDOW_SIZES",
+]

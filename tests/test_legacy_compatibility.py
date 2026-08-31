@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_original_encoding_module_exports_working_decoder():
     from Implementation.encoding import PRIMITIVES, REPEAT, decode
 
@@ -25,10 +28,13 @@ def test_original_nested_conversion_shape():
     assert all(len(unit) == 3 for branch in branches for unit in branch)
 
 
-def test_original_problem_name_uses_repaired_contract():
+def test_original_problem_name_is_v1_only():
     from Implementation.main import OptimizationProblem
 
-    problem = OptimizationProblem(n_var=93, n_obj=2, objective_fn=lambda _: [1, 2])
-    assert problem.genome_version == 2
-    assert problem.n_var == 93
+    problem = OptimizationProblem(n_var=84, n_obj=2, objective_fn=lambda _: [1, 2])
+    assert problem.genome_version == 1
+    assert problem.n_var == 84
     assert problem.n_obj == 2
+
+    with pytest.raises(ValueError, match="V1 only"):
+        OptimizationProblem(n_var=93, n_obj=2, objective_fn=lambda _: [1, 2])

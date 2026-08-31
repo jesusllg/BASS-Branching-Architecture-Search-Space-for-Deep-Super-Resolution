@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-import bass.problem as problem_module
-from bass.evaluation import EvaluationResult
-from bass.nsga3 import NSGA3
-from bass.problem import BASSProblem
+import bass.v1.problem as problem_module
+from bass.shared.nsga3 import NSGA3, ReferenceDirectionEA
+from bass.v1.evaluation import EvaluationResult
+from bass.v1.problem import BASSProblem
 
 
 class ToyProblem:
@@ -43,7 +43,6 @@ def test_problem_evaluation_is_cached():
         return [float(np.sum(individual)), 1.0]
 
     problem = BASSProblem(
-        genome_version=1,
         include_flops=False,
         objective_fn=objective,
     )
@@ -61,7 +60,7 @@ def test_real_evaluations_cache_gray_aliases_by_phenotype(monkeypatch):
         return EvaluationResult(score=3.0, params=2, flops=1, details={})
 
     monkeypatch.setattr(problem_module, "evaluate_architecture", fake_evaluation)
-    problem = BASSProblem(genome_version=1)
+    problem = BASSProblem()
     first = np.zeros(problem.n_var, dtype=np.int8)
     alias = first.copy()
     alias[:3] = [1, 1, 0]  # Gray 4; 4 mod 4 selects the same 16 channels.
@@ -73,7 +72,6 @@ def test_real_evaluations_cache_gray_aliases_by_phenotype(monkeypatch):
 
 def test_problem_rejects_malformed_individual():
     problem = BASSProblem(
-        genome_version=1,
         include_flops=False,
         objective_fn=lambda _: [1.0, 2.0],
     )
@@ -101,3 +99,12 @@ def test_nsga3_handles_all_non_finite_objectives():
     population, _ = NSGA3(NonFiniteProblem(), pop_size=4, n_gen=1, seed=3).run()
     assert population["X"].shape == (4, 6)
     assert np.all(np.isinf(population["F"]))
+
+
+def test_reference_direction_normalization_uses_extreme_point_intercepts():
+    objectives = np.asarray([[1.0, 11.0], [11.0, 1.0], [6.0, 6.0]])
+    normalized = ReferenceDirectionEA._normalize(objectives)
+    np.testing.assert_allclose(
+        normalized,
+        [[0.0, 1.0], [1.0, 0.0], [0.5, 0.5]],
+    )

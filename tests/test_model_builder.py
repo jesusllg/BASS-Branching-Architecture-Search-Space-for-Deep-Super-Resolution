@@ -3,29 +3,23 @@ import pytest
 
 tf = pytest.importorskip("tensorflow")
 
-from bass.genotype import ArchitectureSpec, BlockGene
 from bass.model_builder import build_model
+from bass.v2.genotype import ArchitectureSpec, BlockGene, architecture_from_blocks
 
 
 def hybrid_spec() -> ArchitectureSpec:
-    return ArchitectureSpec(
-        channels=16,
-        branches=(
-            (
-                BlockGene("attention", "channel_attention", 0, 1),
-                BlockGene("attention", "window_attention", 8, 1),
-                BlockGene("attention", "shifted_window_attention", 4, 1),
-            ),
-            (
-                BlockGene("attention", "hybrid_conv_attention", 8, 2),
-                BlockGene("cnn", "conv", 3, 1),
-                BlockGene("cnn", "depthwise_separable_conv", 5, 1),
-            ),
-            (
-                BlockGene("cnn", "dil_conv_d2", 3, 1),
-                BlockGene("cnn", "inverted_bottleneck_e2", 3, 1),
-                BlockGene("cnn", "identity", 1, 1),
-            ),
+    return architecture_from_blocks(
+        16,
+        (
+            BlockGene("attention", "channel_attention_residual", 0, 1),
+            BlockGene("attention", "window_transformer", 8, 1),
+            BlockGene("attention", "regular_shifted_pair", 4, 1),
+            BlockGene("attention", "hybrid_conv_window", 8, 2),
+            BlockGene("cnn", "res_conv", 3, 1),
+            BlockGene("cnn", "res_depthwise_separable", 5, 1),
+            BlockGene("cnn", "res_dilated_d2", 3, 1),
+            BlockGene("cnn", "inverted_residual_e2", 3, 1),
+            BlockGene.skip(),
         ),
     )
 
@@ -84,8 +78,34 @@ def test_original_v1_zero_chromosome_builds():
     assert tuple(output.shape) == (1, 24, 24, 3)
 
 
+def test_compatibility_builder_accepts_numpy_genomes():
+    model = build_model(
+        np.zeros(84, dtype=np.int8), upscale_factor=2, input_shape=(4, 4, 3)
+    )
+    assert model.name == "bass_v1_x2"
+
+
 def test_builder_rejects_invalid_scale_and_shape():
     with pytest.raises(ValueError, match="upscale_factor"):
         build_model(hybrid_spec(), upscale_factor=5)
     with pytest.raises(ValueError, match="height, width, and channels"):
         build_model(hybrid_spec(), input_shape=(16, 3))
+
+
+def test_v2_residual_head_has_an_exact_bicubic_zero_delta_baseline():
+    model = build_model(
+        hybrid_spec(), upscale_factor=2, input_shape=(8, 9, 3), head_mode="residual"
+    )
+    for variable in model.trainable_variables:
+        variable.assign(tf.zeros_like(variable))
+    inputs = tf.random.uniform((1, 8, 9, 3), seed=29)
+    expected = tf.image.resize(inputs, (16, 18), method="bicubic")
+    tf.debugging.assert_near(model(inputs, training=False), expected, atol=1e-6)
+
+
+def test_v2_direct_head_remains_available_only_as_an_explicit_ablation():
+    model = build_model(
+        hybrid_spec(), upscale_factor=2, input_shape=(8, 9, 3), head_mode="direct"
+    )
+    outputs = model(tf.zeros((1, 8, 9, 3)), training=False)
+    assert tuple(outputs.shape) == (1, 16, 18, 3)

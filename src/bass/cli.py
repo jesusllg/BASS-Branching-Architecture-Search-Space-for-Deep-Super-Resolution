@@ -1,11 +1,10 @@
-"""Command-line entry point for the repaired original BASS demonstration."""
+"""Command-line entry point for the separate BASS V1 and BASS V2 spaces."""
 
 from __future__ import annotations
 
 import argparse
 
-from .nsga3 import NSGA3
-from .problem import BASSProblem
+from .shared.nsga3 import ReferenceDirectionEA
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -13,7 +12,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--genome-version", type=int, choices=[1, 2], default=1)
     parser.add_argument("--population", type=int, default=20)
     parser.add_argument("--generations", type=int, default=10)
-    parser.add_argument("--metric", choices=["synflow"], default="synflow")
+    parser.add_argument(
+        "--metric", choices=["gradient_flow", "synflow"], default="gradient_flow"
+    )
+    parser.add_argument(
+        "--head-mode",
+        choices=["residual", "direct"],
+        default="residual",
+        help="V2 fixed SR head; direct is retained only for ablation",
+    )
     parser.add_argument("--scale", type=int, choices=[2, 3, 4], default=2)
     parser.add_argument("--input-size", type=int, default=64)
     parser.add_argument("--seed", type=int, default=42)
@@ -23,15 +30,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    problem = BASSProblem(
-        genome_version=args.genome_version,
-        metric=args.metric,
-        upscale_factor=args.scale,
-        input_shape=(args.input_size, args.input_size, 3),
-        include_flops=not args.skip_flops,
-        evaluation_seed=args.seed,
-    )
-    optimizer = NSGA3(
+    problem_args = {
+        "metric": args.metric,
+        "upscale_factor": args.scale,
+        "input_shape": (args.input_size, args.input_size, 3),
+        "include_flops": not args.skip_flops,
+        "evaluation_seed": args.seed,
+    }
+    if args.genome_version == 1:
+        from .v1.problem import BASSProblem
+    else:
+        if args.metric == "synflow":
+            raise SystemExit(
+                "BASS V2 does not implement canonical SynFlow; "
+                "use --metric gradient_flow"
+            )
+        from .v2.problem import BASSProblem
+
+        problem_args["head_mode"] = args.head_mode
+
+    problem = BASSProblem(**problem_args)
+    optimizer = ReferenceDirectionEA(
         problem,
         pop_size=args.population,
         n_gen=args.generations,
@@ -42,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Non-dominated solutions:")
     for genome, objectives in zip(non_dominated["X"], non_dominated["F"]):
         print(f"genome={genome.tolist()} objectives={objectives.tolist()}")
+    print(f"Canonical duplicates rejected: {optimizer.duplicate_rejections}")
     return 0
 
 

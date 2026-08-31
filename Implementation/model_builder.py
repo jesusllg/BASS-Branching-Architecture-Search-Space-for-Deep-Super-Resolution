@@ -7,9 +7,13 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from bass.encoding import decode
-from bass.model_builder import PixelShuffle, build_model, get_model  # noqa: F401
-from bass.registry import make_unit_layers
+from bass.v1.encoding import decode
+from bass.v1.model_builder import (  # noqa: F401
+    PixelShuffle,
+    build_model,
+    get_model,
+)
+from bass.v1.registry import make_unit_layers
 
 
 def get_branches(genotype):
