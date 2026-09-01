@@ -14,10 +14,10 @@ full publication-scale NAS until the empirical stages below are completed.
 | HN-003 residual asymmetry | Resolved structurally | every searchable CNN and attention transform is residual |
 | HN-004 inverted bottleneck | Resolved | expansion, depthwise transform, linear projection, shortcut |
 | HN-005 missing position | Resolved | convolutional positional encoding in every window block |
-| HN-006 cost-biased CNN pool | Resolved at catalog level | seven CNN and seven attention configurations; no 7x7 full/dilated pool |
+| HN-006 cost-biased CNN pool | Resolved only at catalog level | seven CNN and seven attention configurations; measured cost balance remains an experimental gate |
 | HN-007 SynFlow naming | Resolved | V2 exposes `gradient_flow`; `synflow` is rejected as a metric name |
 | HN-008 AZ-score absent | Intentionally pending | no unvalidated aggregate proxy was invented; calibration is an experiment gate |
-| HN-009 bit crossover | Resolved | crossover exchanges complete branches; mutation replaces semantic states |
+| HN-009 bit crossover | Resolved | crossover recombines the unordered six-parent branch multiset; mutation uses typed semantic moves |
 | HN-010 shifted repetition | Resolved | searchable regular/shifted pair guarantees cross-window communication |
 | HN-011 amplify-only channel gate | Resolved | gate modulates a signed learned delta under a scaled residual |
 | HN-012 stride-1 transpose conv | Removed | retained only in the retired 93-bit import/export description |
@@ -74,9 +74,9 @@ new residual, cost-balanced catalog intentionally removes operations.
   family-balanced calibration against short-trained PSNR first.
 - Channels remain 16/32/48/64 and three BASS branches remain fixed. The audit
   correctly labels these as defensible design choices, not defects.
-- Exact FLOP matching between operations is not imposed. The pool is balanced
-  conceptually and sampled symmetrically; measured cost remains an objective and
-  must be reported by family.
+- Exact FLOP matching between operations is not imposed. A 7/7 configuration
+  count is categorical symmetry, not cost balance; real FLOPs, latency, and
+  memory must be measured and reported by family.
 - Primitive internals still have different learned depths. A residual scale is
   shared across families, but that does not make a convolution and a Transformer
   block computationally identical; proxy and short-training gates must test the
@@ -101,4 +101,5 @@ new residual, cost-balanced catalog intentionally removes operations.
 
 The code now addresses structural and algorithm-interface biases. It does not
 claim that proxy validity or publication-scale search conclusions have already
-been established.
+been established. The later Round-2 findings and their post-V3 disposition are
+tracked in [`ROUND2_AUDIT_RESPONSE.md`](ROUND2_AUDIT_RESPONSE.md).

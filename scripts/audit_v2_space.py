@@ -8,13 +8,19 @@ from collections import Counter
 
 import numpy as np
 
-from bass.v2 import decode, sample_genome
+from bass.v2 import decode, sample_canonical_genome, sample_genome
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--sampling-prior",
+        choices=["canonical", "conditioned"],
+        default="canonical",
+        help="Compare exact canonical-uniform and legacy raw-grid priors",
+    )
     parser.add_argument("--output", type=str)
     return parser
 
@@ -32,8 +38,15 @@ def main(argv: list[str] | None = None) -> int:
     attention_units = []
     active_units = []
     effective_depth = []
+    attention_repeat_depth = []
+    cnn_repeat_depth = []
     for _ in range(args.samples):
-        genome = sample_genome(seed=int(rng.integers(0, np.iinfo(np.int32).max)))
+        sample_seed = int(rng.integers(0, np.iinfo(np.int32).max))
+        genome = (
+            sample_canonical_genome(seed=sample_seed)
+            if args.sampling_prior == "canonical"
+            else sample_genome(seed=sample_seed)
+        )
         spec = decode(genome)
         hashes.add(spec.canonical_hash())
         channels[spec.channels] += 1
@@ -47,10 +60,22 @@ def main(argv: list[str] | None = None) -> int:
         active_units.append(len(active))
         attention_units.append(sum(block.family == "attention" for block in active))
         effective_depth.append(sum(block.repeat for block in active))
+        attention_repeat_depth.append(
+            sum(block.repeat for block in active if block.family == "attention")
+        )
+        cnn_repeat_depth.append(
+            sum(block.repeat for block in active if block.family == "cnn")
+        )
 
     payload = {
         "samples": args.samples,
         "seed": args.seed,
+        "sampling_prior": (
+            "exact_uniform_canonical_architectures"
+            if args.sampling_prior == "canonical"
+            else "conditioned_raw_grid_then_canonicalized"
+        ),
+        "canonical_branch_states": 68_923,
         "unique_canonical_hashes": len(hashes),
         "duplicate_rate": 1.0 - len(hashes) / args.samples,
         "channels": dict(sorted(channels.items())),
@@ -60,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
         "attention_units": _summary(attention_units),
         "active_units": _summary(active_units),
         "repeat_sum": _summary(effective_depth),
+        "attention_repeat_depth": _summary(attention_repeat_depth),
+        "cnn_repeat_depth": _summary(cnn_repeat_depth),
     }
     rendered = json.dumps(payload, indent=2, sort_keys=True)
     print(rendered)

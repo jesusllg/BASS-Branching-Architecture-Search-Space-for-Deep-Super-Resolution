@@ -5,6 +5,8 @@ from __future__ import annotations
 import numbers
 import random
 from collections.abc import Sequence
+from functools import lru_cache
+from itertools import product
 
 from bass.v1.encoding import decode as decode_v1
 from bass.v1.genotype import ArchitectureSpec as V1ArchitectureSpec
@@ -20,7 +22,12 @@ from .config import (
     UNIT_STATE_COUNT,
     UNITS_PER_BRANCH,
 )
-from .genotype import ArchitectureSpec, BlockGene, architecture_from_blocks
+from .genotype import (
+    ArchitectureSpec,
+    BlockGene,
+    architecture_from_blocks,
+    canonicalize_branch,
+)
 from .legacy93 import (
     LegacyArchitectureSpec,
     decode_legacy_bits,
@@ -95,12 +102,65 @@ def decode(genome: ArchitectureSpec | Sequence[int]) -> ArchitectureSpec:
     return architecture_from_blocks(CHANNELS[values[0]], blocks)
 
 
+@lru_cache(maxsize=1)
+def canonical_branch_genomes() -> tuple[tuple[int, ...], ...]:
+    """Enumerate the 68,923 distinct canonical three-unit branch states.
+
+    The raw three-slot grid has many skip-placement and repeat-grouping
+    preimages.  Building this catalog once lets scientific initialization
+    sample canonical branches directly instead of inheriting that bias.
+    """
+
+    branches = {
+        tuple(
+            block_to_state(block)
+            for block in canonicalize_branch(
+                state_to_block(state) for state in raw_states
+            )
+        )
+        for raw_states in product(range(UNIT_STATE_COUNT), repeat=UNITS_PER_BRANCH)
+    }
+    return tuple(sorted(branches))
+
+
+def _sample_branch_multiset(rng: random.Random) -> tuple[tuple[int, ...], ...]:
+    """Sample one unordered branch multiset exactly uniformly."""
+
+    catalog = canonical_branch_genomes()
+    # Stars-and-bars: every size-three multiset maps bijectively to one
+    # size-three subset of range(B + 2).  Sampling the subset uniformly avoids
+    # overweighting three-distinct-branch architectures by a factor of six.
+    bars = sorted(rng.sample(range(len(catalog) + BRANCH_COUNT - 1), BRANCH_COUNT))
+    indices = tuple(position - rank for rank, position in enumerate(bars))
+    return tuple(catalog[index] for index in indices)
+
+
+def sample_canonical_genome(*, seed: int | None = None) -> list[int]:
+    """Sample uniformly from complete canonical V2 architectures.
+
+    Channels and unordered branch multisets are uniform.  Use
+    :func:`sample_genome` only when a deliberately family-conditioned prior is
+    required for an audit or controlled construction.
+    """
+
+    rng = random.Random(seed)
+    branch_states = _sample_branch_multiset(rng)
+    blocks = [state_to_block(state) for branch in branch_states for state in branch]
+    return encode(architecture_from_blocks(rng.choice(CHANNELS), blocks))
+
+
 def sample_genome(
     *,
     seed: int | None = None,
     attention_probability: float = 0.5,
     skip_probability: float = 1.0 / UNIT_STATE_COUNT,
 ) -> list[int]:
+    """Sample a family-conditioned raw grid, then canonicalize it.
+
+    This helper is useful for CNN/attention strata, but it is intentionally not
+    the default NAS initializer because its many-to-one canonicalization gives
+    architectures unequal prior probability.
+    """
     if not 0.0 <= attention_probability <= 1.0:
         raise ValueError("attention_probability must lie in [0, 1]")
     if not 0.0 <= skip_probability < 1.0:

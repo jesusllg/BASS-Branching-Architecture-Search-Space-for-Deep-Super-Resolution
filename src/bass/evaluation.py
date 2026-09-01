@@ -1,4 +1,4 @@
-"""Compatibility evaluation dispatcher for BASS V1 and V2."""
+"""Compatibility evaluation dispatcher for all implemented BASS versions."""
 
 from .v1.evaluation import (
     EvaluationResult,
@@ -11,6 +11,7 @@ from .v1.evaluation import (
 )
 from .v1.genotype import ArchitectureSpec as V1ArchitectureSpec
 from .v2.genotype import ArchitectureSpec as V2ArchitectureSpec
+from .v3.genotype import ArchitectureSpec as V3ArchitectureSpec
 
 
 def evaluate_architecture(architecture, **kwargs):
@@ -22,7 +23,11 @@ def evaluate_architecture(architecture, **kwargs):
         from .v2.evaluation import evaluate_architecture as evaluate_v2
 
         return evaluate_v2(architecture, **kwargs)
-    raise TypeError("Use a bass.v1 or bass.v2 ArchitectureSpec")
+    if isinstance(architecture, V3ArchitectureSpec):
+        from .v3.evaluation import evaluate_architecture as evaluate_v3
+
+        return evaluate_v3(architecture, **kwargs)
+    raise TypeError("Use a bass.v1, bass.v2, or bass.v3 ArchitectureSpec")
 
 
 def evaluate_model(architecture, **kwargs) -> float:

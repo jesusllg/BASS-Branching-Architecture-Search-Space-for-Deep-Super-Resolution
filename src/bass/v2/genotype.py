@@ -113,12 +113,23 @@ def _compress_branch(blocks: Sequence[BlockGene]) -> tuple[BlockGene, ...]:
     return tuple(compressed + [BlockGene.skip()] * (UNITS_PER_BRANCH - len(compressed)))
 
 
+def canonicalize_branch(blocks: Iterable[BlockGene]) -> tuple[BlockGene, ...]:
+    """Return the unique three-slot representation of one BASS branch."""
+
+    branch = tuple(blocks)
+    if len(branch) != UNITS_PER_BRANCH:
+        raise ValueError(f"A BASS V2 branch must contain {UNITS_PER_BRANCH} unit slots")
+    if any(not isinstance(block, BlockGene) for block in branch):
+        raise TypeError("A BASS V2 branch may contain only BlockGene objects")
+    return _compress_branch(branch)
+
+
 def canonicalize_branches(
     branches: Iterable[Iterable[BlockGene]],
 ) -> tuple[tuple[BlockGene, ...], ...]:
     """Pack skips, normalize repeats, then quotient branch permutations."""
 
-    normalized = tuple(_compress_branch(tuple(branch)) for branch in branches)
+    normalized = tuple(canonicalize_branch(branch) for branch in branches)
     if len(normalized) != BRANCH_COUNT:
         raise ValueError(f"BASS V2 requires {BRANCH_COUNT} branches")
     return tuple(

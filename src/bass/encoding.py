@@ -1,4 +1,4 @@
-"""Compatibility dispatcher for explicit :mod:`bass.v1` and :mod:`bass.v2`."""
+"""Compatibility dispatcher for explicit versioned BASS search spaces."""
 
 from __future__ import annotations
 
@@ -37,21 +37,38 @@ from .v2.encoding import (
     sample as sample_v2,
 )
 from .v2.genotype import ArchitectureSpec as V2ArchitectureSpec
+from .v3.encoding import (
+    canonicalize_genome as canonicalize_v3_genome,
+)
+from .v3.encoding import (
+    decode as decode_v3,
+)
+from .v3.encoding import (
+    encode as encode_v3,
+)
+from .v3.encoding import (
+    sample as sample_v3,
+)
+from .v3.genotype import ArchitectureSpec as V3ArchitectureSpec
 
 __all__ = [
     "bits_to_values",
     "bstr_to_rstr",
     "canonicalize_genome",
+    "canonicalize_v3_genome",
     "decode",
     "decode_v1_bits",
     "decode_v1_gene",
     "decode_v2",
     "decode_v2_bits",
+    "decode_v3",
     "encode_v2",
     "encode_v2_bits",
+    "encode_v3",
     "gray_to_int",
     "int_to_gray_bits",
     "sample_v2",
+    "sample_v3",
     "upgrade_v1",
     "values_to_bits",
 ]
@@ -60,13 +77,18 @@ bstr_to_rstr = bits_to_values
 
 
 def decode(
-    genome: V1ArchitectureSpec | V2ArchitectureSpec | Sequence[int],
-) -> V1ArchitectureSpec | V2ArchitectureSpec:
+    genome: V1ArchitectureSpec
+    | V2ArchitectureSpec
+    | V3ArchitectureSpec
+    | Sequence[int],
+) -> V1ArchitectureSpec | V2ArchitectureSpec | V3ArchitectureSpec:
     """Dispatch legacy callers by explicit architecture type or genome length."""
 
     if isinstance(genome, V1ArchitectureSpec):
         return genome
     if isinstance(genome, V2ArchitectureSpec):
+        return genome
+    if isinstance(genome, V3ArchitectureSpec):
         return genome
     values = list(genome)
     if len(values) in {28, 84}:
@@ -75,6 +97,9 @@ def decode(
         return decode_v2(values)
     if len(values) == 93:
         return decode_v2_bits(values)
+    if len(values) == 12:
+        return decode_v3(values)
     raise ValueError(
-        "Expected V1 84-bit/28-value, V2 10-integer, or legacy V2 93-bit input"
+        "Expected V1 84-bit/28-value, V2 10-integer, legacy V2 93-bit, "
+        "or V3 12-integer input"
     )

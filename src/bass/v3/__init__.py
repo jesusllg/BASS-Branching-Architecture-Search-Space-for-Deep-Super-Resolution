@@ -1,11 +1,14 @@
-"""BASS V2: canonical semantic NAS with optional CNN/attention units."""
+"""BASS V3 (IBASS): searchable cross-branch memory exchange for SISR."""
 
+from .blocks import CIMEX, CIMEXLayer
 from .config import (
     ATTENTION_PRIMITIVES,
     CHANNELS,
     CNN_PRIMITIVES,
+    EXCHANGE_CONFIGS,
+    EXCHANGE_SITES,
+    EXCHANGE_STATE_COUNT,
     KERNEL_SIZES,
-    LEGACY_GENOME_BITS,
     REPEATS,
     SEMANTIC_GENOME_LENGTH,
     UNIT_STATE_COUNT,
@@ -15,38 +18,38 @@ from .encoding import (
     block_to_state,
     canonicalize_genome,
     decode,
-    decode_legacy_bits,
-    decode_v2_bits,
     encode,
-    encode_legacy_bits,
-    encode_v2_bits,
-    migrate_legacy93,
-    migrate_v1,
+    exchange_to_state,
+    migrate_v2,
     sample,
     sample_canonical_genome,
     sample_genome,
-    sample_v2,
     state_to_block,
-    upgrade_v1,
+    state_to_exchange,
+    to_v2,
+    upgrade_v2,
 )
 from .genotype import (
     ArchitectureSpec,
     BlockGene,
+    ExchangeGene,
     canonicalize_architecture,
-    canonicalize_branch,
 )
-from .legacy93 import LegacyArchitectureSpec, LegacyBlockGene
-from .model_builder import build_model, feature_tap_metadata
-from .problem import BASSProblem
-from .repair import repair_architecture
-from .variation import SEMANTIC_MUTATION_WEIGHTS
+from .model_builder import build_ibass_model, build_model, feature_tap_metadata
+from .problem import BASSProblem, IBASSProblem
+from .repair import repair_architecture, repair_exchange
+from .variation import EXCHANGE_MUTATION_WEIGHTS, SEMANTIC_MUTATION_WEIGHTS
 
 __all__ = [
     "ATTENTION_PRIMITIVES",
     "CHANNELS",
+    "CIMEX",
     "CNN_PRIMITIVES",
+    "EXCHANGE_CONFIGS",
+    "EXCHANGE_MUTATION_WEIGHTS",
+    "EXCHANGE_SITES",
+    "EXCHANGE_STATE_COUNT",
     "KERNEL_SIZES",
-    "LEGACY_GENOME_BITS",
     "REPEATS",
     "SEMANTIC_GENOME_LENGTH",
     "SEMANTIC_MUTATION_WEIGHTS",
@@ -55,27 +58,26 @@ __all__ = [
     "ArchitectureSpec",
     "BASSProblem",
     "BlockGene",
-    "LegacyArchitectureSpec",
-    "LegacyBlockGene",
+    "CIMEXLayer",
+    "ExchangeGene",
+    "IBASSProblem",
     "block_to_state",
+    "build_ibass_model",
     "build_model",
     "canonicalize_architecture",
-    "canonicalize_branch",
     "canonicalize_genome",
     "decode",
-    "decode_legacy_bits",
-    "decode_v2_bits",
     "encode",
-    "encode_legacy_bits",
-    "encode_v2_bits",
+    "exchange_to_state",
     "feature_tap_metadata",
-    "migrate_legacy93",
-    "migrate_v1",
+    "migrate_v2",
     "repair_architecture",
+    "repair_exchange",
     "sample",
     "sample_canonical_genome",
     "sample_genome",
-    "sample_v2",
     "state_to_block",
-    "upgrade_v1",
+    "state_to_exchange",
+    "to_v2",
+    "upgrade_v2",
 ]

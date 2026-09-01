@@ -1,4 +1,4 @@
-"""TensorFlow/Keras builder for the canonical hybrid BASS V2 space."""
+"""TensorFlow/Keras builder for interaction-aware BASS V3 (IBASS)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,19 @@ from collections.abc import Sequence
 
 import tensorflow as tf
 
-from .config import DEFAULT_HEAD_MODE, DEFAULT_INPUT_CHANNELS, DEFAULT_UPSCALE
-from .encoding import decode
+from bass.v2.model_builder import BicubicUpsample, PixelShuffle
+from bass.v2.model_builder import build_model as build_v2_model
+
+from .config import (
+    BRANCH_COUNT,
+    DEFAULT_HEAD_MODE,
+    DEFAULT_INPUT_CHANNELS,
+    DEFAULT_UPSCALE,
+    UNITS_PER_BRANCH,
+)
+from .encoding import decode, to_v2
 from .genotype import ArchitectureSpec
-from .registry import make_unit_layers
+from .registry import make_exchange_layer, make_unit_layers
 
 keras = tf.keras
 layers = keras.layers
@@ -18,7 +27,7 @@ layers = keras.layers
 def feature_tap_metadata(
     architecture: ArchitectureSpec | Sequence[int],
 ) -> tuple[dict[str, int | str | bool | None], ...]:
-    """Describe every feature tap without pretending unit depths are equal."""
+    """Describe unit taps, effective depth, and following exchange state."""
 
     spec = decode(architecture)
     records = []
@@ -31,6 +40,14 @@ def feature_tap_metadata(
                 attention_blocks = block.repeat * (
                     2 if block.op == "regular_shifted_pair" else 1
                 )
+            exchange_after = None
+            if unit_index <= len(spec.exchanges):
+                exchange = spec.exchanges[unit_index - 1]
+                exchange_after = (
+                    "none"
+                    if not exchange.is_enabled
+                    else f"cimex_k{exchange.prototypes}"
+                )
             records.append(
                 {
                     "name": f"branch{branch_index}.unit{unit_index}",
@@ -42,43 +59,11 @@ def feature_tap_metadata(
                     "repeat": block.repeat,
                     "cumulative_repeat_depth": cumulative_repeat_depth,
                     "internal_attention_blocks": attention_blocks,
-                    "exchange_after": None,
-                    "tap_is_pre_exchange": False,
+                    "exchange_after": exchange_after,
+                    "tap_is_pre_exchange": exchange_after is not None,
                 }
             )
     return tuple(records)
-
-
-@keras.utils.register_keras_serializable(package="bass.v2")
-class PixelShuffle(layers.Layer):
-    def __init__(self, scale: int, **kwargs):
-        super().__init__(**kwargs)
-        self.scale = int(scale)
-
-    def call(self, inputs: tf.Tensor) -> tf.Tensor:
-        return tf.nn.depth_to_space(inputs, self.scale)
-
-    def get_config(self) -> dict:
-        config = super().get_config()
-        config.update({"scale": self.scale})
-        return config
-
-
-@keras.utils.register_keras_serializable(package="bass.v2")
-class BicubicUpsample(layers.Layer):
-    def __init__(self, scale: int, **kwargs):
-        super().__init__(**kwargs)
-        self.scale = int(scale)
-
-    def call(self, inputs: tf.Tensor) -> tf.Tensor:
-        shape = tf.shape(inputs)
-        size = [shape[1] * self.scale, shape[2] * self.scale]
-        return tf.image.resize(inputs, size, method="bicubic")
-
-    def get_config(self) -> dict:
-        config = super().get_config()
-        config.update({"scale": self.scale})
-        return config
 
 
 def build_model(
@@ -90,9 +75,18 @@ def build_model(
     return_feature_model: bool = False,
     head_mode: str = DEFAULT_HEAD_MODE,
 ):
-    """Build V2 with a fixed residual SR head or the direct-head ablation."""
+    """Build IBASS, delegating the exact no-exchange subspace to BASS V2."""
 
     spec = decode(architecture)
+    if not spec.uses_cimex:
+        return build_v2_model(
+            to_v2(spec),
+            upscale_factor=upscale_factor,
+            input_channels=input_channels,
+            input_shape=input_shape,
+            return_feature_model=return_feature_model,
+            head_mode=head_mode,
+        )
     if upscale_factor not in {2, 3, 4}:
         raise ValueError("upscale_factor must be one of 2, 3, or 4")
     if input_channels <= 0:
@@ -115,20 +109,35 @@ def build_model(
         name="stem",
     )(inputs)
 
-    branch_outputs = []
-    feature_tensors = []
-    feature_names = []
-    for branch_index, branch in enumerate(spec.branches, start=1):
-        x = stem
-        for unit_index, block in enumerate(branch, start=1):
-            unit_name = f"branch{branch_index}_unit{unit_index}_{block.op}"
+    branch_states = [stem for _ in spec.branches]
+    feature_tensors = [[None] * UNITS_PER_BRANCH for _ in spec.branches]
+    for unit_index in range(UNITS_PER_BRANCH):
+        next_states = []
+        for branch_index, branch in enumerate(spec.branches, start=1):
+            block = branch[unit_index]
+            x = branch_states[branch_index - 1]
+            unit_name = f"branch{branch_index}_unit{unit_index + 1}_{block.op}"
             for layer in make_unit_layers(block, spec.channels, unit_name):
                 x = layer(x)
-            feature_tensors.append(x)
-            feature_names.append(f"branch{branch_index}.unit{unit_index}")
-        branch_outputs.append(x)
+            next_states.append(x)
+            feature_tensors[branch_index - 1][unit_index] = x
+        branch_states = next_states
 
-    merged = layers.Add(name="branch_add")(branch_outputs)
+        if unit_index < len(spec.exchanges):
+            exchange = spec.exchanges[unit_index]
+            exchange_layer = make_exchange_layer(
+                exchange,
+                spec.channels,
+                name=(
+                    f"exchange{unit_index + 1}_cimex_k{exchange.prototypes}"
+                    if exchange.is_enabled
+                    else f"exchange{unit_index + 1}_none"
+                ),
+            )
+            if exchange_layer is not None:
+                branch_states = list(exchange_layer(branch_states))
+
+    merged = layers.Add(name="branch_add")(branch_states)
     reconstruction_channels = input_channels * (upscale_factor**2)
     x = layers.Conv2D(
         reconstruction_channels,
@@ -162,11 +171,18 @@ def build_model(
             name="sr",
         )(x)
 
-    model = keras.Model(inputs, outputs, name=f"bass_v2_x{upscale_factor}")
+    model = keras.Model(inputs, outputs, name=f"ibass_v3_x{upscale_factor}")
     if not return_feature_model:
         return model
-    feature_model = keras.Model(inputs, feature_tensors, name="bass_v2_feature_taps")
-    return model, feature_model, tuple(feature_names)
+    flat_features = [tensor for branch in feature_tensors for tensor in branch]
+    feature_names = tuple(
+        f"branch{branch_index}.unit{unit_index}"
+        for branch_index in range(1, BRANCH_COUNT + 1)
+        for unit_index in range(1, UNITS_PER_BRANCH + 1)
+    )
+    feature_model = keras.Model(inputs, flat_features, name="ibass_v3_feature_taps")
+    return model, feature_model, feature_names
 
 
+build_ibass_model = build_model
 get_model = build_model

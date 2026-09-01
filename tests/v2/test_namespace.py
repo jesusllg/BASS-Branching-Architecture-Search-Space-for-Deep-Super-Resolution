@@ -26,6 +26,17 @@ def test_v2_has_a_strict_10_integer_scientific_codec():
         v2.decode([False] * 10)
 
 
+def test_direct_canonical_sampler_has_the_exhaustive_branch_catalog():
+    from bass.v2.encoding import canonical_branch_genomes
+
+    assert len(canonical_branch_genomes()) == 68_923
+    first = v2.sample_canonical_genome(seed=91)
+    second = v2.sample_canonical_genome(seed=91)
+    assert first == second
+    assert v2.encode(v2.decode(first)) == first
+    assert v2.canonicalize_genome(first) == first
+
+
 def test_v2_rejects_the_unimplemented_synflow_label_before_search():
     with pytest.raises(ValueError, match="does not implement canonical SynFlow"):
         v2.BASSProblem(metric="synflow")

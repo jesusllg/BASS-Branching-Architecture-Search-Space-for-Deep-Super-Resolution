@@ -1,8 +1,10 @@
 import numpy as np
 
 from bass.shared.nsga3 import NSGA3
-from bass.v2 import decode
+from bass.v2 import decode, encode
+from bass.v2.genotype import BlockGene, canonicalize_architecture
 from bass.v2.problem import BASSProblem
+from bass.v2.variation import mutate_block
 
 
 def make_problem():
@@ -35,6 +37,9 @@ def test_v2_semantic_search_is_reproducible():
     np.testing.assert_allclose(first["F"], second["F"])
     assert first_optimizer.history == second_optimizer.history
     assert [record["generation"] for record in first_optimizer.history] == [1, 2]
+    assert all(
+        "attempted_mutation_transitions" in record for record in first_optimizer.history
+    )
 
 
 def test_v2_rejects_noncanonical_population_members():
@@ -49,3 +54,56 @@ def test_v2_rejects_noncanonical_population_members():
         assert "canonical" in str(error)
     else:
         raise AssertionError("Noncanonical genome was silently accepted")
+
+
+def test_crossover_recombines_the_unordered_six_branch_multiset():
+    skip = BlockGene.skip()
+    blocks = (
+        BlockGene("cnn", "res_conv", 3, 1),
+        BlockGene("cnn", "res_conv", 5, 1),
+        BlockGene("cnn", "res_dilated_d2", 3, 1),
+        BlockGene("attention", "channel_attention_residual", 0, 1),
+        BlockGene("attention", "window_transformer", 4, 1),
+        BlockGene("attention", "window_transformer", 8, 1),
+    )
+    left = canonicalize_architecture(
+        16, tuple((block, skip, skip) for block in blocks[:3])
+    )
+    right = canonicalize_architecture(
+        64, tuple((block, skip, skip) for block in blocks[3:])
+    )
+    pool = left.branches + right.branches
+    expected = canonicalize_architecture(64, (pool[1], pool[5], pool[2]))
+
+    child = make_problem().crossover(
+        np.asarray(encode(left), dtype=np.int16),
+        np.asarray(encode(right), dtype=np.int16),
+        np.random.default_rng(0),
+    )
+    assert decode(child) == expected
+
+
+def test_semantic_mutation_moves_are_local_and_auditable():
+    original = BlockGene("attention", "window_transformer", 4, 2)
+    rng = np.random.default_rng(44)
+    observed = {}
+    for _ in range(500):
+        mutated, transition = mutate_block(original, rng)
+        observed.setdefault(transition, mutated)
+
+    assert set(observed) == {
+        "repeat",
+        "argument",
+        "operation",
+        "family_flip",
+        "delete",
+    }
+    assert observed["repeat"].operation_key == original.operation_key
+    assert observed["repeat"].repeat != original.repeat
+    assert observed["argument"].family == original.family
+    assert observed["argument"].op == original.op
+    assert observed["argument"].arg != original.arg
+    assert observed["operation"].family == original.family
+    assert observed["operation"].op != original.op
+    assert observed["family_flip"].family != original.family
+    assert observed["delete"].is_skip
