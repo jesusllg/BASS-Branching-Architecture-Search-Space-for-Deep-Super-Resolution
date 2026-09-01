@@ -82,6 +82,11 @@ CIMEX therefore starts near identity with an effective gate of `0.01`, stored
 through a float32 `atanh` parameter. The exact V2 subspace is represented
 honestly by the searchable `none` state—not by pretending enabled CIMEX is V2.
 
+This is a falsifiable choice, not a sacred constant. The qualifying primitive
+gate tests the explicit `alpha=0` identity boundary without demanding impossible
+projection gradients there, and CIMEX ablation A07 compares zero against the
+released small nonzero initialization under matched training.
+
 ## Search contract
 
 The strict scientific genome contains 12 semantic integers:
@@ -189,7 +194,7 @@ pre-exchange tap.
 | Dynamic non-divisible spatial sizes and scales 2/3/4 | Tested |
 | Mixed precision and Keras save/load | Tested |
 | Direct canonical sampling, semantic crossover/mutation | Tested |
-| 10k structural audit harness | Implemented; rerun for every frozen revision |
+| 1M qualifying structural audit | Harness implemented; qualifying run pending |
 | 500-model executable gate | Harness implemented; full frozen-revision run pending |
 | Real FLOPs, latency, and peak accelerator memory | Pending |
 | Proxy-to-short-training rank calibration | Pending |
@@ -197,13 +202,19 @@ pre-exchange tap.
 | Standard SISR training and benchmark evidence | Pending |
 | Novelty or SoTA claim | **Not established** |
 
-Run the executable gates explicitly:
+Run local preflight harnesses explicitly:
 
 ```bash
 python scripts/audit_v3_space.py --samples 10000 --seed 42
 python scripts/validate_v3_models.py --samples 500 --seed 42 \
   --input-size 16 --scale 2
 ```
+
+Direct harness output is preflight, not a qualifying PASS. The complete
+13-gate dependency graph, required hardware, immutable work orders, result
+contracts, and staged CIMEX ablations live in
+[`experiments/`](../../../experiments/README.md). No qualifying hardware gate
+is recorded yet.
 
 ## Soundness and novelty boundary
 
@@ -238,6 +249,7 @@ systematic search and compare mechanisms under matched protocols.
 | Evaluation/problem | [`src/bass/v3/`](../../../src/bass/v3/) |
 | Contract tests | [`tests/v3/`](../../../tests/v3/) |
 | Structural/executable gates | [`scripts/audit_v3_space.py`](../../../scripts/audit_v3_space.py), [`scripts/validate_v3_models.py`](../../../scripts/validate_v3_models.py) |
+| Qualifying experiment protocol | [`experiments/`](../../../experiments/README.md) |
 
 The Round-2 audit's issue-by-issue post-V3 disposition is in
 [`docs/ROUND2_AUDIT_RESPONSE.md`](../../ROUND2_AUDIT_RESPONSE.md). Return to the

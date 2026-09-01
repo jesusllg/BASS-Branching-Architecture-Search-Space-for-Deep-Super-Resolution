@@ -148,7 +148,7 @@ Executable code is not evidence that a NAS formulation is scientifically
 useful. Before full V2 claims, the project requires:
 
 1. unit and version-boundary tests;
-2. a 10,000-sample structural audit;
+2. a one-million-draw qualifying structural audit (10k remains preflight);
 3. a 500-model family-stratified build/gradient validation;
 4. family-balanced proxy calibration against trained outcomes;
 5. short-training rank validation; and
@@ -159,6 +159,9 @@ The issue-by-issue decision and commands live in
 three gates does not substitute for proxy calibration or SR benchmarking.
 The subsequent Round-2 disposition is recorded in
 [`docs/ROUND2_AUDIT_RESPONSE.md`](../../ROUND2_AUDIT_RESPONSE.md).
+The exact 14-gate dependency graph, hardware profiles, work orders, and result
+contracts live in [`experiments/`](../../../experiments/README.md). No
+qualifying hardware gate is recorded yet.
 
 ## Implementation map
 
@@ -174,6 +177,7 @@ The subsequent Round-2 disposition is recorded in
 | Semantic variation | [`src/bass/v2/variation.py`](../../../src/bass/v2/variation.py) |
 | Contract tests | [`tests/v2/`](../../../tests/v2/) |
 | Audit harnesses | [`scripts/`](../../../scripts/) |
+| Qualifying experiment protocol | [`experiments/`](../../../experiments/README.md) |
 
 Return to the [research overview](../../../README.md) or inspect the
 [cross-version boundary](../../VERSIONS.md).

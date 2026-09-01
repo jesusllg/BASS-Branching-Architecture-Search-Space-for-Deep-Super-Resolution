@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "id": "cpu-ci",
+      "purpose": "Deterministic unit, schema, codec, and serialization contracts",
+      "accelerator": "cpu",
+      "gpus": 0,
+      "minimum_vram_gib": 0,
+      "cpus": 4,
+      "memory_gib": 16,
+      "walltime": "01:00:00",
+      "qualifying": true,
+      "notes": "Pin Python and TensorFlow from the lock/environment capture; CPU smoke results qualify only for software-contract gates."
+    },
+    {
+      "id": "cpu-structural",
+      "purpose": "Large codec sampling, duplicate analysis, and search-space statistics",
+      "accelerator": "cpu",
+      "gpus": 0,
+      "minimum_vram_gib": 0,
+      "cpus": 16,
+      "memory_gib": 32,
+      "walltime": "08:00:00",
+      "qualifying": true,
+      "notes": "No neural model execution is required; persist seeds and every sampled canonical hash or a reproducible aggregate plus collision records."
+    },
+    {
+      "id": "gpu-model-validation",
+      "purpose": "Forward/backward, mixed precision, shape, and serialization validation",
+      "accelerator": "cuda",
+      "gpus": 1,
+      "minimum_vram_gib": 16,
+      "cpus": 8,
+      "memory_gib": 32,
+      "walltime": "12:00:00",
+      "qualifying": true,
+      "notes": "Record accelerator model, driver, CUDA, cuDNN, TensorFlow, precision policy, and batch/input shape."
+    },
+    {
+      "id": "gpu-profile",
+      "purpose": "Real graph FLOPs, latency, proxy, and short-training measurements",
+      "accelerator": "cuda",
+      "gpus": 1,
+      "minimum_vram_gib": 24,
+      "cpus": 12,
+      "memory_gib": 64,
+      "walltime": "48:00:00",
+      "qualifying": true,
+      "notes": "Warm up before latency timing, synchronize the device, retain OOMs, and never substitute analytical FLOP estimates for traced graph FLOPs."
+    },
+    {
+      "id": "gpu-target-memory",
+      "purpose": "Peak inference and optimizer-step memory on the declared deployment target",
+      "accelerator": "target-device",
+      "gpus": 1,
+      "minimum_vram_gib": 0,
+      "cpus": 8,
+      "memory_gib": 32,
+      "walltime": "12:00:00",
+      "qualifying": true,
+      "notes": "The exact target device is a preregistered run parameter. Execute one architecture per fresh process; an OOM is data, not a dropped sample."
+    },
+    {
+      "id": "multi-gpu-training",
+      "purpose": "Matched-recipe SR training, multi-seed dry NAS, and CIMEX ablations",
+      "accelerator": "cuda",
+      "gpus": 4,
+      "minimum_vram_gib": 24,
+      "cpus": 32,
+      "memory_gib": 128,
+      "walltime": "168:00:00",
+      "qualifying": true,
+      "notes": "Dataset checksums, crop/degradation pipeline, optimizer, schedule, augmentation, seeds, mixed precision, and wall-clock budget must be frozen before training."
+    },
+    {
+      "id": "cpu-analysis",
+      "purpose": "Correlation, bootstrap, Pareto, and blinded decision analysis",
+      "accelerator": "cpu",
+      "gpus": 0,
+      "minimum_vram_gib": 0,
+      "cpus": 16,
+      "memory_gib": 64,
+      "walltime": "24:00:00",
+      "qualifying": true,
+      "notes": "Consume immutable upstream result manifests; store scripts, exclusion decisions, confidence intervals, and both raw and multiplicity-adjusted statistics."
+    }
+  ]
+}

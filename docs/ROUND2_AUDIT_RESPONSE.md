@@ -47,7 +47,34 @@ does not establish novelty or performance. CIMEX remains a candidate research
 contribution until matched-cost ablations and SR benchmarks falsify simpler
 explanations.
 
-## Gates that code cannot honestly close
+## Frozen execution contracts
+
+The open work is now specified rather than merely listed:
+
+- V2 has 14 gates (`V2-G00` through `V2-G13`);
+- V3 has 13 gates (`V3-G00` through `V3-G12`);
+- every gate declares dependencies, cohort, hardware, command contract,
+  artifacts, criteria, and automatic/review/conditional disposition; and
+- `bass-gates prepare` creates a source-bound work order and Slurm template.
+
+The protocol deliberately refuses several tempting but unsound shortcuts. It
+does not invent one universal proxy-correlation threshold, treats absolute
+Params/FLOPs Spearman of 0.95 as a review trigger rather than automatic
+objective deletion, makes memory relative to a preregistered target device,
+and calls CIMEX pairs matched-cost only when **both** Params and traced FLOPs
+are within 5%.
+
+The released CIMEX gate remains `0.01`: it avoids making enabled exchange
+invisible to the current one-backward proxy. Exact `alpha=0` is still tested as
+an identity boundary and matched-training ablation. Requiring nonzero projection
+gradients at exact zero would contradict the chain rule, so the full subpath is
+checked with the released/open gate instead.
+
+See [`experiments/README.md`](../experiments/README.md), the
+[`result contracts`](../experiments/RESULT_CONTRACTS.md), and the staged
+[`CIMEX ablation matrix`](../experiments/CIMEX_ABLATIONS.md).
+
+## Gates that are defined but not run
 
 The following work remains mandatory before **GO FOR FULL NAS**:
 
@@ -71,6 +98,10 @@ The following work remains mandatory before **GO FOR FULL NAS**:
 Until those gates pass, the correct status is: **runtime implemented,
 scientific full-NAS readiness NO-GO**. That is a stronger and more useful claim
 than either “V3 is done” or “V3 is invalid.”
+
+The ledger intentionally starts at 0/14 qualifying V2 gates and 0/13
+qualifying V3 gates. Local unit and smoke evidence is retained, but is not
+relabeled as hardware validation.
 
 Both structural scripts accept `--sampling-prior canonical` (default) or
 `--sampling-prior conditioned`. Reports must name the prior; results from the

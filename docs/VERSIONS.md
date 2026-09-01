@@ -49,6 +49,9 @@ Rules:
    implementation locations for a research version.
 7. Runtime availability must never be described as proxy validity, benchmark
    superiority, novelty proof, or full-NAS readiness.
+8. Qualifying V2/V3 evidence must reference the frozen protocol digest, clean
+   source revision, hardware profile, work order, raw result artifacts, and
+   every failed/OOM case; smoke runs cannot be promoted after the fact.
 
 ## V1 boundary
 
@@ -114,12 +117,16 @@ assert v3.to_v2(extended) == base
 - CIMEX and interaction-aware changes belong in `src/bass/v3/`; they must not
   mutate the V2 phenotype.
 - Version-neutral evolutionary mechanics belong in `src/bass/shared/`.
+- Cross-version experimental contracts belong in `src/bass/experiments/` and
+  `experiments/`; measured outcomes do not belong in a version's runtime code.
 - Compatibility changes belong in top-level facades or `Implementation/` and
   must delegate instead of duplicating a version.
 
 Audit decisions are recorded in
 [`V2_AUDIT_RESPONSE.md`](V2_AUDIT_RESPONSE.md) and
 [`ROUND2_AUDIT_RESPONSE.md`](ROUND2_AUDIT_RESPONSE.md).
+The executable hand-off for the remaining hardware work is
+[`../experiments/README.md`](../experiments/README.md).
 
 Run the complete software gate before merging runtime changes:
 
