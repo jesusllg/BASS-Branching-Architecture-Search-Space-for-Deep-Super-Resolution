@@ -78,6 +78,17 @@ def main(argv: list[str] | None = None) -> int:
                     "stratum": stratum,
                     "channels": spec.channels,
                     "attention_fraction": spec.attention_fraction,
+                    "attention_repeat_fraction": (
+                        sum(
+                            block.repeat
+                            for block in spec.active_blocks
+                            if block.family == "attention"
+                        )
+                        / sum(block.repeat for block in spec.active_blocks)
+                        if spec.active_blocks
+                        else 0.0
+                    ),
+                    "repeat_depth": sum(block.repeat for block in spec.active_blocks),
                     "params": int(model.count_params()),
                     "gradient_coverage": diagnostics.coverage,
                 }

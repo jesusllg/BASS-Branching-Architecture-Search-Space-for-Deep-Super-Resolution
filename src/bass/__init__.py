@@ -1,16 +1,16 @@
 """Versioned BASS search spaces.
 
-Use :mod:`bass.v1` for the frozen CNN baseline and :mod:`bass.v2` for the
-optional hybrid attention search space. Historical top-level exports are loaded
-lazily for compatibility.
+Use :mod:`bass.v1` for the frozen CNN baseline, :mod:`bass.v2` for optional
+hybrid attention, and :mod:`bass.v3` for interaction-aware IBASS. Historical
+top-level exports are loaded lazily for compatibility.
 """
 
 from __future__ import annotations
 
 from importlib import import_module
 
-__version__ = "0.3.0"
-__all__ = ["v1", "v2"]
+__version__ = "0.4.0"
+__all__ = ["v1", "v2", "v3"]
 
 _V2_EXPORTS = {
     "ATTENTION_PRIMITIVES",
@@ -34,7 +34,7 @@ _V2_EXPORTS = {
 
 
 def __getattr__(name: str):
-    if name in {"v1", "v2"}:
+    if name in {"v1", "v2", "v3"}:
         return import_module(f"{__name__}.{name}")
     if name == "decode":
         return import_module(f"{__name__}.encoding").decode

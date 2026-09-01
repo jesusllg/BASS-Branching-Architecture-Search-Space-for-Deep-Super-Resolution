@@ -1,4 +1,4 @@
-"""Canonical semantic optimization problem for BASS V2."""
+"""Semantic multi-objective optimization problem for BASS V3."""
 
 from __future__ import annotations
 
@@ -9,29 +9,35 @@ from collections.abc import Callable, Sequence
 import numpy as np
 
 from .config import (
+    BRANCH_COUNT,
     DEFAULT_HEAD_MODE,
     DEFAULT_SEED,
+    EXCHANGE_SITES,
+    EXCHANGE_STATE_COUNT,
     SEMANTIC_GENOME_LENGTH,
     UNIT_STATE_COUNT,
+    UNITS_PER_BRANCH,
 )
 from .encoding import (
     block_to_state,
     canonicalize_genome,
     decode,
     encode,
+    exchange_to_state,
     sample_canonical_genome,
     state_to_block,
+    state_to_exchange,
 )
 from .evaluation import evaluate_architecture
 from .genotype import canonicalize_architecture
-from .variation import mutate_block
+from .variation import mutate_block, mutate_exchange
 
 
 class BASSProblem:
-    """V2 problem with architecture-aware sampling, crossover, and mutation."""
+    """IBASS problem with semantic branch and exchange variation."""
 
-    genome_version = 2
-    genome_kind = "canonical-semantic"
+    genome_version = 3
+    genome_kind = "interaction-semantic"
 
     def __init__(
         self,
@@ -42,20 +48,27 @@ class BASSProblem:
         include_flops: bool = True,
         evaluation_seed: int = DEFAULT_SEED,
         head_mode: str = DEFAULT_HEAD_MODE,
+        exchange_probability: float | None = None,
         objective_fn: Callable[[np.ndarray], Sequence[float]] | None = None,
     ):
         metric_key = metric.lower()
         if metric_key == "synflow":
             raise ValueError(
-                "V2 does not implement canonical SynFlow; use 'gradient_flow'"
+                "V3 does not implement canonical SynFlow; use 'gradient_flow'"
             )
         if metric_key not in {"gradient_flow", "psnr"}:
             raise ValueError("metric must be 'gradient_flow' or 'psnr'")
+        if exchange_probability is not None and not 0.0 <= exchange_probability <= 1.0:
+            raise ValueError("exchange_probability must lie in [0, 1] or be None")
         self.n_var = SEMANTIC_GENOME_LENGTH
+        self.unit_gene_end = 1 + BRANCH_COUNT * UNITS_PER_BRANCH
         self.n_obj = 3 if include_flops else 2
         self.xl = np.zeros(self.n_var, dtype=np.int16)
         self.xu = np.asarray(
-            [3] + [UNIT_STATE_COUNT - 1] * (self.n_var - 1), dtype=np.int16
+            [3]
+            + [UNIT_STATE_COUNT - 1] * (BRANCH_COUNT * UNITS_PER_BRANCH)
+            + [EXCHANGE_STATE_COUNT - 1] * EXCHANGE_SITES,
+            dtype=np.int16,
         )
         self.metric = metric_key
         self.upscale_factor = upscale_factor
@@ -63,6 +76,9 @@ class BASSProblem:
         self.include_flops = include_flops
         self.evaluation_seed = int(evaluation_seed)
         self.head_mode = head_mode
+        self.exchange_probability = (
+            None if exchange_probability is None else float(exchange_probability)
+        )
         self.objective_fn = objective_fn
         self._cache: dict[str | tuple[int, ...], list[float]] = {}
         self._mutation_transition_counts: Counter[str] = Counter()
@@ -70,9 +86,9 @@ class BASSProblem:
     def canonicalize_individual(self, individual: np.ndarray) -> np.ndarray:
         raw = np.asarray(individual)
         if raw.shape != (self.n_var,):
-            raise ValueError(f"Expected a V2 individual with shape ({self.n_var},)")
+            raise ValueError(f"Expected a V3 individual with shape ({self.n_var},)")
         if not np.all(np.equal(raw, np.floor(raw))):
-            raise ValueError("V2 semantic genes must be integers")
+            raise ValueError("V3 semantic genes must be integers")
         return np.asarray(canonicalize_genome(raw.tolist()), dtype=np.int16)
 
     def canonical_key(self, individual: np.ndarray) -> str:
@@ -80,7 +96,13 @@ class BASSProblem:
 
     def sample_individual(self, rng: np.random.Generator) -> np.ndarray:
         seed = int(rng.integers(0, np.iinfo(np.int32).max))
-        return np.asarray(sample_canonical_genome(seed=seed), dtype=np.int16)
+        return np.asarray(
+            sample_canonical_genome(
+                seed=seed,
+                exchange_probability=self.exchange_probability,
+            ),
+            dtype=np.int16,
+        )
 
     def crossover(
         self,
@@ -94,8 +116,15 @@ class BASSProblem:
         branch_pool = left_spec.branches + right_spec.branches
         selected = rng.choice(len(branch_pool), size=3, replace=False)
         branches = tuple(branch_pool[int(index)] for index in selected)
+        exchanges = tuple(
+            left_exchange if rng.random() < 0.5 else right_exchange
+            for left_exchange, right_exchange in zip(
+                left_spec.exchanges, right_spec.exchanges
+            )
+        )
         return np.asarray(
-            encode(canonicalize_architecture(channels, branches)), dtype=np.int16
+            encode(canonicalize_architecture(channels, branches, exchanges)),
+            dtype=np.int16,
         )
 
     def mutate(
@@ -112,9 +141,15 @@ class BASSProblem:
             choices = [value for value in range(4) if value != int(child[0])]
             child[0] = int(rng.choice(choices))
             self._mutation_transition_counts["channel"] += 1
-        for index in np.flatnonzero(mask[1:]) + 1:
+        for index in np.flatnonzero(mask[1 : self.unit_gene_end]) + 1:
             block, transition = mutate_block(state_to_block(int(child[index])), rng)
             child[index] = block_to_state(block)
+            self._mutation_transition_counts[transition] += 1
+        for index in np.flatnonzero(mask[self.unit_gene_end :]) + self.unit_gene_end:
+            exchange, transition = mutate_exchange(
+                state_to_exchange(int(child[index])), rng
+            )
+            child[index] = exchange_to_state(exchange)
             self._mutation_transition_counts[transition] += 1
         return self.canonicalize_individual(child)
 
@@ -124,7 +159,7 @@ class BASSProblem:
         del n_eval
         normalized = self.canonicalize_individual(individual)
         if not np.array_equal(normalized, individual):
-            raise ValueError("V2 population may contain only canonical individuals")
+            raise ValueError("V3 population may contain only canonical individuals")
         architecture = decode(normalized)
         cache_key: str | tuple[int, ...]
         if self.objective_fn is None:
@@ -171,3 +206,6 @@ class BASSProblem:
         """Attempted semantic moves, including duplicate-rejected offspring."""
 
         return dict(sorted(self._mutation_transition_counts.items()))
+
+
+IBASSProblem = BASSProblem

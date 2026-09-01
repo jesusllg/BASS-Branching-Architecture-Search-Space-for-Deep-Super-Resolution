@@ -60,7 +60,7 @@ class ReferenceDirectionEA:
         self.rng = np.random.default_rng(seed)
         self.n_eval = 0
         self.duplicate_rejections = 0
-        self.history: list[dict[str, int]] = []
+        self.history: list[dict[str, object]] = []
         self._seen_keys: set[object] = set()
         self.ref_points = self._reference_points(problem.n_obj, self.divisions)
 
@@ -290,6 +290,9 @@ class ReferenceDirectionEA:
         genomes, objectives = self._initialize()
         for generation in range(self.n_gen):
             rejected_before = self.duplicate_rejections
+            mutation_counts_before = dict(
+                getattr(self.problem, "mutation_transition_counts", {})
+            )
             ranks = self._rank_map(objectives)
             children = []
             child_objectives = []
@@ -320,6 +323,15 @@ class ReferenceDirectionEA:
                 "duplicate_rejections": self.duplicate_rejections - rejected_before,
                 "duplicate_rejections_total": self.duplicate_rejections,
             }
+            mutation_counts_after = dict(
+                getattr(self.problem, "mutation_transition_counts", {})
+            )
+            if mutation_counts_after:
+                record["attempted_mutation_transitions"] = {
+                    name: count - mutation_counts_before.get(name, 0)
+                    for name, count in sorted(mutation_counts_after.items())
+                    if count - mutation_counts_before.get(name, 0)
+                }
             self.history.append(record)
             if self.verbose:
                 print(

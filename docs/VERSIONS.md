@@ -1,22 +1,28 @@
 # BASS version boundaries
 
-This document is the source of truth for keeping BASS V1 and BASS V2 separate
-inside the same repository.
+This document is the source of truth for keeping BASS V1, V2, and V3 distinct
+inside one research repository. Each version has its own architecture map,
+schema, implementation, and scientific limitations:
+
+- [BASS V1: frozen CNN-only baseline](versions/v1/README.md)
+- [BASS V2: optional-attention search space](versions/v2/README.md)
+- [BASS V3: IBASS with optional CIMEX exchange](versions/v3/README.md)
 
 ## Contract matrix
 
-| Contract | V1 | V2 |
-|---|---|---|
-| Namespace | `bass.v1` | `bass.v2` |
-| Schema version | 1 | 2 |
-| Scientific genome | 84 binary bits | 10 canonical semantic integers |
-| Retired import format | none | 93 binary bits (`bass.v2.legacy93`) |
-| Decoded legacy form | 28 integers | none |
-| Macro-topology | 3 branches × 3 units | 3 branches × 3 units |
-| Unit families | CNN | CNN or attention |
-| Attention dependency | forbidden | owned by V2 |
-| Canonicalization | canonical decode | skip/repeat normalization plus branch sorting |
-| Optimization problem | `bass.v1.problem.BASSProblem` | `bass.v2.problem.BASSProblem` |
+| Contract | V1 | V2 | V3 |
+|---|---|---|---|
+| Runtime status | Implemented and frozen | Implemented; experiment-gated | **Implemented; experiment-gated** |
+| Namespace | `bass.v1` | `bass.v2` | `bass.v3` |
+| CLI selector | `--genome-version 1` | `--genome-version 2` | `--genome-version 3` |
+| Schema version | 1 | 2 | 3 |
+| Scientific genome | 84 binary bits | 10 canonical semantic integers | 12 canonical semantic integers |
+| Retired import format | None | 93 bits via `bass.v2.legacy93` | None |
+| Macro-topology | 3 branches × 3 units | 3 branches × 3 units | 3 branches × 3 units plus two optional exchange sites |
+| Unit families | CNN/identity | Skip, residual CNN, residual attention | V2-compatible units |
+| Cross-branch communication | Final addition only | Final addition only | Searchable CIMEX after stages 1 and 2 |
+| Canonicalization | V1 decode contract | Skip/repeat normalization and branch sorting | V2 rules plus inactive centered-exchange removal |
+| Optimization problem | `bass.v1.problem.BASSProblem` | `bass.v2.problem.BASSProblem` | `bass.v3.problem.BASSProblem` |
 
 ## Dependency direction
 
@@ -24,37 +30,58 @@ inside the same repository.
 flowchart TB
     CLI["bass.cli"] --> V1["bass.v1"]
     CLI --> V2["bass.v2"]
+    CLI --> V3["bass.v3"]
     CLI --> Shared["bass.shared"]
-    V2 -->|"explicit upgrade only"| V1Codec["bass.v1 codec/schema"]
+    V2 -->|"explicit approximate migration"| V1Codec["bass.v1 codec"]
+    V3 -->|"exact none/none extension"| V2
 ```
 
 Rules:
 
-1. `bass.v1` must never import `bass.v2`, `bass.blocks.attention`, or an
-   attention primitive.
-2. `bass.v2` owns all attention code. Its only V1 import is the explicit
-   `upgrade_v1` migration path in `bass.v2.encoding`.
-3. `bass.shared` must not know either genotype schema.
-4. `Implementation/` maps only to V1 and must reject a 93-bit request.
-5. Top-level modules under `src/bass/*.py` are compatibility facades, not the
-   implementation location for either version.
+1. `bass.v1` must never import V2, V3, or attention code.
+2. `bass.v2` owns its implemented unit-attention catalog. Its only V1
+   dependency is the explicit migration path in `bass.v2.encoding`.
+3. `bass.v3` may reuse V2's frozen unit contract and exact no-exchange builder;
+   V2 must never import V3.
+4. `bass.shared` must not know any versioned genotype schema.
+5. `Implementation/` maps only to V1 and must reject other versions.
+6. Top-level modules under `src/bass/*.py` are compatibility dispatchers, not
+   implementation locations for a research version.
+7. Runtime availability must never be described as proxy validity, benchmark
+   superiority, novelty proof, or full-NAS readiness.
 
-## V2 branch semantics
+## V1 boundary
 
-The three branches remain because they are the defining BASS macro-architecture.
-They do not have predetermined jobs. Each of the nine units independently
-searches one of 43 complete semantic states: skip, or one of 14 valid primitive
-configurations with repeat 1-3. Seven configurations are CNN and seven are
-attention, so no inactive kernel/window field or primitive-count family prior is
-hidden in the encoding.
+V1 preserves the original 84-bit Gray-coded CNN-only phenotype. Legacy modulo
+decoding and branch-order semantics are part of the frozen reproduction
+contract. Correcting them in place would silently change the original space.
 
-This permits varied branches without adding a separate branch-type variable.
-A branch can be local, contextual, hybrid, or identity-heavy as an emergent
-result of its three unit choices.
+## V2 boundary
 
-## The migration boundary
+V2 retains three branches and three unit slots per branch but gives every slot
+the same skip/CNN/attention catalog. Branches acquire local, contextual,
+hybrid, or shallow behavior through search—not predefined roles.
 
-Use only this path to cross versions:
+Its scientific schema stores one channel ID plus nine complete unit states.
+Canonicalization packs skips, normalizes equivalent adjacent repeat runs, and
+quotients permutations of symmetric branches. Scientific initialization uses
+the exhaustive canonical branch catalog rather than canonicalizing a biased
+raw-grid sample. V2's phenotype is stable; CIMEX does not belong here.
+
+## V3 boundary
+
+V3 extends independent branch search to interaction-aware branch search. CIMEX
+exchanges compact consensus/innovation memories after stages 1 and 2; each site
+chooses `none`, `cimex_k8`, or `cimex_k16`.
+
+`none/none` is a hard exact-extension contract. V3 delegates that subspace to
+the V2 model builder, and tests compare graph name, parameters, initialized
+weights, and output for the same seed. Enabled exchange cannot be projected
+back to V2 silently.
+
+## Migration boundaries
+
+V1 to V2 is explicit but not phenotype-exact:
 
 ```python
 from bass import v1, v2
@@ -64,26 +91,37 @@ new = v2.migrate_v1(old)
 new_genome = v2.encode(new)
 ```
 
-The conversion preserves channels and CNN-only status, but it is deliberately
-not described as phenotype-exact: V2 uses residual operations and removes
-redundant V1 primitives. Use V1 itself whenever exact V1 behavior is required.
+It preserves channel count and CNN-only status, but V2 has a different residual
+catalog and head. Use V1 whenever exact V1 behavior is required.
 
-There is no implicit V2-to-V1 conversion because an attention phenotype cannot
-be represented faithfully in V1.
+V2 embeds exactly into V3:
 
-## Adding code
+```python
+from bass import v2, v3
 
-- A V1 bug fix belongs in `src/bass/v1/` and must retain the 84-bit phenotype.
-- A new attention primitive belongs in `src/bass/v2/blocks/`, with registry,
-  codec/repair, serialization, shape, and gradient tests under `tests/v2/`.
-- Version-neutral evolutionary logic belongs in `src/bass/shared/`.
-- Compatibility changes belong in the top-level facades or `Implementation/`;
-  they must delegate rather than duplicate either implementation.
+base_genome = v2.sample_canonical_genome(seed=42)
+base = v2.decode(base_genome)
+extended = v3.migrate_v2(base)
+assert v3.to_v2(extended) == base
+```
 
-The disposition of the independent scientific audit is recorded issue by issue
-in [`V2_AUDIT_RESPONSE.md`](V2_AUDIT_RESPONSE.md).
+## Where changes belong
 
-Run the complete gate before merging:
+- V1 compatibility fixes belong in `src/bass/v1/` and must preserve its
+  84-bit phenotype.
+- V2 unit primitives belong in `src/bass/v2/blocks/` with codec, registry,
+  serialization, shape, gradient, and canonicalization tests.
+- CIMEX and interaction-aware changes belong in `src/bass/v3/`; they must not
+  mutate the V2 phenotype.
+- Version-neutral evolutionary mechanics belong in `src/bass/shared/`.
+- Compatibility changes belong in top-level facades or `Implementation/` and
+  must delegate instead of duplicating a version.
+
+Audit decisions are recorded in
+[`V2_AUDIT_RESPONSE.md`](V2_AUDIT_RESPONSE.md) and
+[`ROUND2_AUDIT_RESPONSE.md`](ROUND2_AUDIT_RESPONSE.md).
+
+Run the complete software gate before merging runtime changes:
 
 ```bash
 python -m pytest

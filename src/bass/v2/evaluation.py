@@ -214,7 +214,16 @@ def evaluate_model(architecture: ArchitectureSpec, **kwargs) -> float:
 
 
 calculate_model_flops = count_flops
-synflow_metric_nas = gradient_flow_score
+
+
+def synflow_metric_nas(*args, **kwargs):
+    """Reject the retired, scientifically misleading V2 compatibility name."""
+
+    del args, kwargs
+    raise RuntimeError(
+        "bass.v2.evaluation.synflow_metric_nas is retired: the implemented "
+        "quantity is gradient_flow_score, not canonical SynFlow"
+    )
 
 
 def count_params(model: tf.keras.Model) -> int:

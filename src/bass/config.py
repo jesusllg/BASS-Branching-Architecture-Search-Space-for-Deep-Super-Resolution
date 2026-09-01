@@ -1,4 +1,4 @@
-"""Compatibility constants; new code should import ``bass.v1`` or ``bass.v2``."""
+"""Compatibility constants; new code should import a versioned BASS package."""
 
 from .v1.config import (
     BRANCH_COUNT,
@@ -16,6 +16,8 @@ from .v1.config import GENOME_BITS as V1_GENOME_BITS
 from .v2.config import ATTENTION_PRIMITIVES, HEADS_BY_CHANNELS, WINDOW_SIZES
 from .v2.config import LEGACY_GENOME_BITS as V2_GENOME_BITS
 from .v2.config import SEMANTIC_GENOME_LENGTH as V2_SEMANTIC_GENOME_LENGTH
+from .v3.config import EXCHANGE_CONFIGS
+from .v3.config import SEMANTIC_GENOME_LENGTH as V3_SEMANTIC_GENOME_LENGTH
 
 __all__ = [
     "ATTENTION_PRIMITIVES",
@@ -25,6 +27,7 @@ __all__ = [
     "DEFAULT_INPUT_CHANNELS",
     "DEFAULT_SEED",
     "DEFAULT_UPSCALE",
+    "EXCHANGE_CONFIGS",
     "HEADS_BY_CHANNELS",
     "KERNEL_SIZES",
     "REPEATS",
@@ -33,5 +36,6 @@ __all__ = [
     "V1_GENOME_BITS",
     "V2_GENOME_BITS",
     "V2_SEMANTIC_GENOME_LENGTH",
+    "V3_SEMANTIC_GENOME_LENGTH",
     "WINDOW_SIZES",
 ]

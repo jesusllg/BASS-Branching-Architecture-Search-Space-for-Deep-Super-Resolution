@@ -11,4 +11,8 @@ class BASSProblem:
             from .v2.problem import BASSProblem as V2Problem
 
             return V2Problem(**kwargs)
-        raise ValueError("genome_version must be 1 or 2")
+        if genome_version == 3:
+            from .v3.problem import BASSProblem as V3Problem
+
+            return V3Problem(**kwargs)
+        raise ValueError("genome_version must be 1, 2, or 3")
