@@ -86,8 +86,8 @@ new residual, cost-balanced catalog intentionally removes operations.
 
 1. Unit gate: all 14 primitive configurations x four channel widths, forward,
    backward, finite values, save/load, non-divisible shapes, and scales.
-2. Structural gate: run `scripts/audit_v2_space.py --samples 10000` and inspect
-   unique-rate, channel, family, operator, and depth distributions.
+2. Structural preflight: run `scripts/audit_v2_space.py --samples 10000`; the
+   qualifying Round-2 gate repeats the frozen analysis at one million draws.
 3. Executable gate: run `scripts/validate_v2_models.py --samples 500`; require
    zero unexplained failures and full gradient coverage.
 4. Proxy gate: calibrate each intended proxy on 500-1000 family-balanced models;
@@ -103,3 +103,5 @@ The code now addresses structural and algorithm-interface biases. It does not
 claim that proxy validity or publication-scale search conclusions have already
 been established. The later Round-2 findings and their post-V3 disposition are
 tracked in [`ROUND2_AUDIT_RESPONSE.md`](ROUND2_AUDIT_RESPONSE.md).
+The exact hardware and result hand-off is
+[`../experiments/README.md`](../experiments/README.md).

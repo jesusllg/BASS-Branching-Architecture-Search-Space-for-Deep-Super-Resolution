@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "result_envelope": {
+    "required": [
+      "schema_version",
+      "protocol_id",
+      "protocol_digest",
+      "gate_id",
+      "source_revision",
+      "work_order_digest",
+      "status",
+      "qualifying",
+      "smoke",
+      "hardware_observed",
+      "command_expanded",
+      "environment_observed",
+      "started_at",
+      "finished_at",
+      "criteria",
+      "artifacts",
+      "deviations",
+      "notes"
+    ],
+    "statuses": ["NOT_RUN", "PASS", "FAIL", "ERROR"],
+    "pass_rules": [
+      "qualifying must be true",
+      "smoke must be false",
+      "protocol digest and gate must match",
+      "every frozen criterion must pass",
+      "review gates require reviewed_by"
+    ]
+  },
+  "contracts": [
+    {
+      "id": "architecture-cohort-v1",
+      "format": "jsonl",
+      "required": ["index", "version", "genome", "canonical_hash", "stratum", "seed", "selection_rule"]
+    },
+    {
+      "id": "model-profile-v1",
+      "format": "jsonl",
+      "required": ["canonical_hash", "params", "flops_traced", "latency_raw_ms", "warmup", "input_shape", "batch_size", "precision", "device", "status", "error"]
+    },
+    {
+      "id": "memory-case-v1",
+      "format": "jsonl",
+      "required": ["canonical_hash", "mode", "peak_bytes", "input_shape", "batch_size", "precision", "device", "status", "error"]
+    },
+    {
+      "id": "proxy-value-v1",
+      "format": "jsonl",
+      "required": ["canonical_hash", "proxy", "proxy_version", "seed", "value", "runtime_seconds", "finite", "error"]
+    },
+    {
+      "id": "training-result-v1",
+      "format": "jsonl",
+      "required": ["canonical_hash", "recipe_digest", "dataset_digest", "seed", "metrics", "cost", "status", "error"]
+    },
+    {
+      "id": "search-history-v1",
+      "format": "jsonl",
+      "required": ["run_seed", "generation", "population", "objectives", "duplicate_rejections", "mutations", "runtime_seconds"]
+    },
+    {
+      "id": "ablation-result-v1",
+      "format": "jsonl",
+      "required": ["pair_id", "factor", "level", "matched_cost", "parameter_delta", "flop_delta", "seed", "metrics", "diagnostics", "status", "error"]
+    }
+  ]
+}

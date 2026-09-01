@@ -172,6 +172,21 @@ bass-search --genome-version 2 --population 4 --generations 1 \
   --input-size 16 --skip-flops
 ```
 
+Plan—not pretend to have run—the qualifying hardware experiments:
+
+```bash
+bass-gates list
+bass-gates show v3 V3-G08
+bass-gates prepare v3 V3-G06 \
+  --output runs/v3-g06/work-order.json \
+  --parameter target_device=NVIDIA_L4 \
+  --slurm runs/v3-g06/job.slurm
+```
+
+The frozen protocols, hardware profiles, result envelopes, and CIMEX ablation
+matrix are documented in [`experiments/`](experiments/README.md). Smoke or
+dirty-tree work orders are permanently nonqualifying.
+
 The historical `Implementation/` entry point is V1-only. It cannot be used to
 launch V2 or V3 implicitly.
 
@@ -196,7 +211,8 @@ already exceeds the SISR state of the art.
 The independent Round-2 audit is reconciled issue by issue in
 [`docs/ROUND2_AUDIT_RESPONSE.md`](docs/ROUND2_AUDIT_RESPONSE.md). Its current
 conclusion is intentionally nuanced: runtime implementation is ready for
-experiments, but **GO FOR FULL NAS remains gated**.
+experiments, but **GO FOR FULL NAS remains gated**. The execution ledger starts
+at zero qualifying passes: V2 and V3 remain NO-GO for empirical/SoTA claims.
 
 The search minimizes `[-score, parameters, FLOPs]`. The bundled V2 proxy is
 named `gradient_flow`; it is not presented as canonical SynFlow or AZ-NAS.
@@ -214,6 +230,8 @@ objects are supplied.
 | [`src/bass/v2/`](src/bass/v2/) | Independent V2 implementation, including attention blocks |
 | [`src/bass/v3/`](src/bass/v3/) | Independent V3 implementation, including CIMEX exchange |
 | [`src/bass/shared/`](src/bass/shared/) | Version-neutral evolutionary search machinery |
+| [`src/bass/experiments/`](src/bass/experiments/) | Machine-readable V2/V3 protocols and work-order tooling |
+| [`experiments/`](experiments/README.md) | Hardware map, result contracts, gate ledger, and CIMEX ablations |
 | [`src/bass/cli.py`](src/bass/cli.py) | Explicit V1/V2/V3 CLI routing |
 | [`Implementation/`](Implementation/) | Historical V1-only compatibility interface |
 | [`tests/`](tests/) | Version boundaries, codecs, models, and search behavior |
