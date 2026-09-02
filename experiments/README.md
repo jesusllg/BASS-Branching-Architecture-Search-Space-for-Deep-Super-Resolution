@@ -17,9 +17,9 @@ The canonical manifests are packaged at:
 
 - [`gates-v2.json`](../src/bass/experiments/protocols/gates-v2.json): 14 gates
   from software contracts through full-NAS authorization;
-- [`gates-v3.json`](../src/bass/experiments/protocols/gates-v3.json): 13 gates
-  covering exact V2 embedding, CIMEX invariants, cost, ablations, SR evidence,
-  search, and research authorization;
+- [`gates-v3.json`](../src/bass/experiments/protocols/gates-v3.json): 14 gates
+  covering exact V2 embedding, stage-aware canonical equivalence, CIMEX
+  invariants, cost, ablations, SR evidence, search, and research authorization;
 - [`hardware.json`](../src/bass/experiments/protocols/hardware.json): qualifying
   CPU, single-GPU, target-device, and multi-GPU profiles; and
 - [`result-contracts.json`](../src/bass/experiments/protocols/result-contracts.json):
@@ -29,7 +29,8 @@ The canonical manifests are packaged at:
 
 ```mermaid
 flowchart TB
-    SW["Software + exact contracts"] --> ST["Structural + executable cohorts"]
+    SW["Software + exact contracts"] --> EQ["Stage/equivalence checks"]
+    EQ --> ST["Structural + executable cohorts"]
     ST --> COST["Real FLOPs, latency, memory"]
     COST --> PROXY["Blinded proxy calibration"]
     PROXY --> TRAIN["Matched short training + ablations"]
@@ -37,9 +38,9 @@ flowchart TB
     SEARCH --> DECIDE["GO / REVISE / NO-GO"]
 ```
 
-V2 and V3 share this evidence ladder, but V3 adds the exact-V2-subspace and
-CIMEX causal-ablation obligations. Gates may run in parallel only when their
-declared dependencies permit it.
+V2 and V3 share this evidence ladder, but V3 adds the exact-V2-subspace,
+stage-aware-equivalence, and CIMEX causal-ablation obligations. Gates may run
+in parallel only when their declared dependencies permit it.
 
 ## Inspect and prepare work
 
@@ -48,7 +49,7 @@ Install the development package, then inspect the frozen plan:
 ```bash
 bass-gates list
 bass-gates show v2 V2-G03
-bass-gates show v3 V3-G08
+bass-gates show v3 V3-G03
 ```
 
 Prepare a work order for the machine that will execute it:
@@ -62,9 +63,12 @@ bass-gates prepare v3 V3-G06 \
   --slurm runs/v3-g06/job.slurm
 ```
 
-The work order records the protocol digest, current source revision, dirty-tree
-state, required hardware, exact criteria, and expected artifacts. A work order
-created with `--smoke` is useful for plumbing but is permanently nonqualifying.
+The work order records two distinct identities: the Git revision of the whole
+checkout and the SHA-256 of the version-specific runtime tree. It also records
+the protocol digest, dirty-tree state, required hardware, exact criteria, and
+expected artifacts. Qualifying work requires all three frozen identities to
+match. A work order created with `--smoke` is useful for plumbing but is
+permanently nonqualifying.
 
 The generated Slurm file is intentionally a safe template, not a guessed
 cluster configuration. Replace `${BASS_*_RUNNER}` variables with the laboratory
@@ -79,6 +83,8 @@ hardware is scheduled:
 ```bash
 python scripts/audit_v2_space.py --samples 1000000 --output structural-v2.json
 python scripts/validate_v2_models.py --samples 500 --output executable-v2.json
+python scripts/audit_v3_stage_equivalence.py --samples 10000 \
+  --output stage-equivalence-v3.json
 python scripts/audit_v3_space.py --samples 1000000 --output structural-v3.json
 python scripts/validate_v3_models.py --samples 500 --output executable-v3.json
 ```
@@ -94,6 +100,21 @@ and deployment target belong to the execution environment. Their inputs and
 outputs are nevertheless fixed by
 [`RESULT_CONTRACTS.md`](RESULT_CONTRACTS.md); “external” does not mean
 unspecified.
+
+Validate a returned manifest in two deliberately separate steps:
+
+```bash
+# Structural consistency only; this does not inspect artifact bytes.
+bass-gates validate-result v3 V3-G06 result.json \
+  --work-order work-order.json
+
+# Publication-grade evidence check: schema, hardware, timestamps, and bytes.
+bass-gates verify-result v3 V3-G06 result.json \
+  --work-order work-order.json --artifact-root runs/v3-g06
+```
+
+Remote artifacts require a laboratory adapter that resolves the immutable URI
+to bytes. Without that resolver, they cannot satisfy evidence verification.
 
 ## Decisions deliberately not automated
 
@@ -114,9 +135,11 @@ No qualifying result is committed yet:
 
 | Version | Protocol | Defined | Qualifying gates passed | Decision |
 |---|---|---:|---:|---|
-| V2 | `bass-v2-gates-1.0` | Yes | 0 / 14 | **NO-GO pending execution** |
-| V3 | `bass-v3-gates-1.0` | Yes | 0 / 13 | **NO-GO pending execution** |
+| V2 | `bass-v2-gates-1.1` | Yes | 0 / 14 | **NO-GO pending execution** |
+| V3 | `bass-v3-gates-1.1` | Yes | 0 / 14 | **NO-GO pending execution** |
 
-Do not edit this table from an informal run. Validate result envelopes, retain
-failed cases and deviations, and update the ledger only through the final
-decision gate.
+Do not edit this table from an informal run. Validate result envelopes and
+their referenced bytes, retain failed cases and deviations, and update the
+ledger only through the final decision gate. `JUSTIFIED_SKIP` exists only in
+the signed ledger and only for a gate declared `conditional`; it is never a
+result status or a shortcut around a mandatory gate.

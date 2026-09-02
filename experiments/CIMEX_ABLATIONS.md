@@ -41,6 +41,8 @@ subspace control.
 | A06 | Projections | shared across branches | branch-specific | Is symmetry/parameter sharing beneficial? |
 | A07 | Initialization | released small nonzero alpha (`0.01`) | exact `alpha=0` identity | Does function-preserving insertion outweigh one-step proxy blindness and delayed subpath learning? |
 | A08 | Compact context | prototype memory | matched local/window attention | Is the proposed memory better than a credible efficient context control? |
+| A09 | Simple communication | prototype memory | leave-one-out branch mean + shared 1×1 projection | Does learned prototype assignment beat a much simpler permutation-equivariant exchange? |
+| A10 | Simple fusion | prototype memory | own/leave-one-out concatenation + shared 1×1 projection | Is content-addressed memory necessary beyond cheap feature fusion? |
 
 Stage A passes only if the full mechanism has a repeatable practical advantage
 over no exchange or a simpler matched-cost control and its diagnostics support

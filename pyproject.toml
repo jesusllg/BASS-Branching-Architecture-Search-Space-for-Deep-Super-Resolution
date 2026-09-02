@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bass-sr"
-version = "0.5.0"
+version = "0.6.0"
 description = "Branching Architecture Search Space for single-image super-resolution"
 readme = "README.md"
 requires-python = ">=3.10"

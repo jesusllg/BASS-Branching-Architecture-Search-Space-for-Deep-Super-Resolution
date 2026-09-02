@@ -7,6 +7,7 @@
       "protocol_digest",
       "gate_id",
       "source_revision",
+      "runtime_tree_sha256",
       "work_order_digest",
       "status",
       "qualifying",
@@ -25,9 +26,20 @@
     "pass_rules": [
       "qualifying must be true",
       "smoke must be false",
-      "protocol digest and gate must match",
+      "protocol, runtime tree, work order, gate, and hardware must match",
       "every frozen criterion must pass",
-      "review gates require reviewed_by"
+      "review gates require reviewed_by",
+      "publication authorization requires artifact-byte verification"
+    ]
+  },
+  "gate_ledger": {
+    "schema_version": 1,
+    "dispositions": ["NOT_RUN", "PASS", "FAIL", "ERROR", "JUSTIFIED_SKIP"],
+    "rules": [
+      "JUSTIFIED_SKIP is a ledger disposition, never an execution-result status",
+      "only conditional gates may use JUSTIFIED_SKIP",
+      "JUSTIFIED_SKIP requires a signed structured justification",
+      "GO requires PASS for every mandatory gate and PASS or JUSTIFIED_SKIP for conditional gates"
     ]
   },
   "contracts": [

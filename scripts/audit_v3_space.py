@@ -98,7 +98,7 @@ def run_audit(samples: int, seed: int, sampling_prior: str = "canonical") -> dic
     unique = len(genome_to_hash)
     return {
         "schema_version": 3,
-        "representation": "interaction-semantic-v1",
+        "representation": "interaction-semantic-v2",
         "sampling_prior": (
             "exact_uniform_canonical_architectures"
             if sampling_prior == "canonical"
@@ -110,6 +110,13 @@ def run_audit(samples: int, seed: int, sampling_prior: str = "canonical") -> dic
         "canonical_aliases": 0,
         "semantic_genome_length": v3.SEMANTIC_GENOME_LENGTH,
         "semantic_grid_size_before_canonical_quotient": 4 * (43**9) * (3**2),
+        "effective_stage_aware_architecture_count": v3.canonical_architecture_count(),
+        "canonical_branch_catalog_sizes": {
+            "none_none": len(v3.canonical_branch_genomes((False, False))),
+            "cimex_none": len(v3.canonical_branch_genomes((True, False))),
+            "none_cimex": len(v3.canonical_branch_genomes((False, True))),
+            "cimex_cimex": len(v3.canonical_branch_genomes((True, True))),
+        },
         "channel_counts": dict(sorted(channel_counts.items())),
         "enabled_exchange_site_counts": dict(sorted(enabled_site_counts.items())),
         "exchange_state_counts": dict(sorted(exchange_counts.items())),

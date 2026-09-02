@@ -57,7 +57,7 @@ flowchart TB
 |---|---|---|---|---:|---|---|
 | [BASS V1](docs/versions/v1/README.md) | What can the original CNN-only branching space express? | Eight CNN/identity primitives | Final addition only | 84 Gray-coded bits | Direct PixelShuffle head with sigmoid output | **Implemented; frozen baseline** |
 | [BASS V2](docs/versions/v2/README.md) | Should each unit use convolution, attention, or skip? | Seven residual CNN and seven residual attention configurations, plus skip | Final addition only | 10 canonical semantic integers | Learned residual over bicubic LR | **Implemented; experiment-gated** |
-| [BASS V3](docs/versions/v3/README.md) | Should branches exchange compact information while remaining diverse? | V2-compatible units plus optional CIMEX exchange genes | Searchable exchange after stages 1 and 2 | 12 canonical semantic integers | Exact V2 residual head | **Implemented; experiment-gated** |
+| [BASS V3](docs/versions/v3/README.md) | Should branches exchange compact information while remaining diverse? | V2-compatible units plus optional CIMEX exchange genes | Searchable exchange after stages 1 and 2 | 12 stage-aware semantic integers | Exact V2 residual head | **Stage-aware implementation; experiment-gated** |
 
 Important distinctions:
 
@@ -66,6 +66,8 @@ Important distinctions:
   search contract with residual primitives and a different reconstruction head.
 - V3 is a released research runtime, not a benchmark result. Its exchange genes
   include `none`; with `none/none`, the builder delegates to the exact V2 graph.
+- V3 canonicalization is joint: enabled CIMEX sites are hard stage barriers;
+  skip/repeat compression is allowed only inside barrier-delimited segments.
 - The default V2/V3 optimizer initializer samples complete canonical
   architectures directly. Family-conditioned `sample(...)` helpers are for
   construction and validation strata, not the default scientific prior.
@@ -147,8 +149,8 @@ assert sr.shape == (1, 62, 94, 3)
 ```
 
 The example deliberately enables CIMEX for inspection. NAS initialization uses
-`v3.sample_canonical_genome()` and is uniform over complete canonical V3
-architectures unless a conditioned exchange prior is explicitly requested.
+`v3.sample_canonical_genome()` and is uniform over the corrected stage-aware V3
+space unless a hierarchical exchange prior is explicitly requested.
 
 ## Run a search
 
@@ -202,10 +204,11 @@ already exceeds the SISR state of the art.
   and executable audit harnesses. Full NAS claims remain gated on proxy
   calibration and short-training rank validation; see
   [`docs/V2_AUDIT_RESPONSE.md`](docs/V2_AUDIT_RESPONSE.md).
-- V3 has a strict codec, exact V2 boundary, CIMEX implementation, canonical
-  search operators, tensor/gradient/equivariance/save-load tests, and audit
-  harnesses. It still requires cost profiling, proxy calibration, ablations,
-  and standard SISR training; see its
+- V3 has a strict stage-aware codec, exact V2 boundary, CIMEX implementation,
+  corrected direct sampler, exact cardinality, semantic search operators,
+  tensor/gradient/equivariance/save-load tests, and audit harnesses. It still
+  requires hardware gate execution, cost profiling, proxy calibration,
+  ablations, and standard SISR training; see its
   [version README](docs/versions/v3/README.md).
 
 The independent Round-2 audit is reconciled issue by issue in
@@ -213,6 +216,9 @@ The independent Round-2 audit is reconciled issue by issue in
 conclusion is intentionally nuanced: runtime implementation is ready for
 experiments, but **GO FOR FULL NAS remains gated**. The execution ledger starts
 at zero qualifying passes: V2 and V3 remain NO-GO for empirical/SoTA claims.
+The Round-3 stage-boundary defect and experiment-verification findings are
+resolved or explicitly dispositioned in
+[`docs/ROUND3_AUDIT_RESPONSE.md`](docs/ROUND3_AUDIT_RESPONSE.md).
 
 The search minimizes `[-score, parameters, FLOPs]`. The bundled V2 proxy is
 named `gradient_flow`; it is not presented as canonical SynFlow or AZ-NAS.

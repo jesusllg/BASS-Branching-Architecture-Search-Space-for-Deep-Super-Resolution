@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 
 from .contracts import load_hardware_profiles, load_protocol
-from .results import validate_result
+from .ledger import validate_gate_ledger
+from .results import validate_result_schema, verify_result_evidence
 from .work_orders import (
     create_work_order,
     render_slurm,
@@ -66,6 +67,21 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("gate")
     validate.add_argument("path", type=Path)
     validate.add_argument("--work-order", type=Path, required=True)
+
+    verify = subparsers.add_parser(
+        "verify-result", help="verify a result envelope and its artifact bytes"
+    )
+    verify.add_argument("version", type=_version)
+    verify.add_argument("gate")
+    verify.add_argument("path", type=Path)
+    verify.add_argument("--work-order", type=Path, required=True)
+    verify.add_argument("--artifact-root", type=Path, required=True)
+
+    ledger = subparsers.add_parser(
+        "validate-ledger", help="validate a signed final gate ledger"
+    )
+    ledger.add_argument("version", type=_version)
+    ledger.add_argument("path", type=Path)
     return parser
 
 
@@ -79,7 +95,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "validate-work-order":
         payload = json.loads(args.path.read_text(encoding="utf-8"))
-        errors = validate_work_order(payload)
+        protocols = [load_protocol(version) for version in (2, 3)]
+        matching = [
+            protocol
+            for protocol in protocols
+            if protocol.protocol_id == payload.get("protocol_id")
+        ]
+        if len(matching) != 1:
+            errors = ["work order does not identify a current V2/V3 protocol"]
+        else:
+            protocol = matching[0]
+            try:
+                gate = protocol.gate(payload.get("gate_id"))
+            except KeyError as error:
+                errors = [str(error)]
+            else:
+                hardware = load_hardware_profiles()[gate.hardware]
+                errors = validate_work_order(
+                    payload, protocol=protocol, gate=gate, hardware=hardware
+                )
         print(json.dumps({"valid": not errors, "errors": errors}, indent=2))
         return int(bool(errors))
 
@@ -111,7 +145,35 @@ def main(argv: list[str] | None = None) -> int:
         assert gate is not None
         payload = json.loads(args.path.read_text(encoding="utf-8"))
         work_order = json.loads(args.work_order.read_text(encoding="utf-8"))
-        errors = validate_result(payload, protocol, gate, work_order)
+        errors = validate_result_schema(payload, protocol, gate, work_order)
+        print(
+            json.dumps(
+                {"valid": not errors, "verification": "schema", "errors": errors},
+                indent=2,
+            )
+        )
+        return int(bool(errors))
+    if args.command == "verify-result":
+        assert gate is not None
+        payload = json.loads(args.path.read_text(encoding="utf-8"))
+        work_order = json.loads(args.work_order.read_text(encoding="utf-8"))
+        errors = verify_result_evidence(
+            payload,
+            protocol,
+            gate,
+            work_order,
+            artifact_root=args.artifact_root,
+        )
+        print(
+            json.dumps(
+                {"valid": not errors, "verification": "evidence", "errors": errors},
+                indent=2,
+            )
+        )
+        return int(bool(errors))
+    if args.command == "validate-ledger":
+        payload = json.loads(args.path.read_text(encoding="utf-8"))
+        errors = validate_gate_ledger(payload, protocol)
         print(json.dumps({"valid": not errors, "errors": errors}, indent=2))
         return int(bool(errors))
     raise AssertionError(f"Unhandled command {args.command}")

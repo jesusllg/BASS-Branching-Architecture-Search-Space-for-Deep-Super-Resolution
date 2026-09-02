@@ -9,15 +9,34 @@ Every result uses the envelope defined in
 and contains:
 
 - the exact protocol ID/digest, work-order digest, gate ID, clean source
-  revision, start/finish timestamps, expanded command, and observed environment;
+  revision, version-specific runtime-tree digest, timezone-aware start/finish
+  timestamps, expanded command, and observed environment;
 - `smoke`, `qualifying`, and one of `NOT_RUN`, `PASS`, `FAIL`, or `ERROR`;
 - one disposition for every frozen criterion, in the original order;
 - immutable artifact paths plus SHA-256 digests; and
 - notes, deviations, exclusions, OOMs, and failed seeds.
 
-`PASS` is rejected when the run is smoke/nonqualifying, its source/protocol does
-not match the supplied work order, a criterion is false, or a review gate lacks
-a reviewer identity.
+`PASS` is rejected when the run is smoke/nonqualifying, its source, runtime
+tree, protocol, gate, or hardware does not match the supplied work order, a
+criterion is false, or a review gate lacks a reviewer identity.
+
+The three frozen identities answer different questions:
+
+| Identity | What it binds |
+|---|---|
+| `source_revision` | The complete Git checkout used for the run |
+| `runtime_tree_sha256` | The version-specific executable BASS implementation |
+| `protocol_digest` | The immutable gate design, thresholds, and expected evidence |
+
+A documentation-only commit may change the first identity without changing the
+runtime tree. A gate edit changes the protocol digest without pretending the
+model implementation changed. Qualifying work orders must nevertheless be
+created from a clean tree and match all frozen identities.
+
+`runtime_contract.audit_base_revision` is provenance: it identifies the
+revision whose audit caused the contract revision. It is deliberately not
+treated as the executable runtime identity; `runtime_tree_sha256` provides the
+enforced compatibility rule.
 
 ## Required adapter records
 
@@ -46,6 +65,33 @@ storage if the manifest contains stable URIs and hashes.
   final ledger with a signed justification (for example, no aggregate proxy was
   preregistered).
 
-The validator checks the envelope and frozen criterion mapping. Scientific
-statistics remain the responsibility of the versioned analysis scripts and
-human review; schema validation is not a rubber stamp for a conclusion.
+## Schema validation is not evidence verification
+
+`bass-gates validate-result` checks the envelope, originating work order, and
+frozen criterion mapping. It intentionally reports `verification: schema` and
+does not claim that a URI exists or that its bytes match the manifest.
+
+`bass-gates verify-result` additionally verifies ordered timezone-aware
+timestamps, the observed hardware minima, local artifact containment and
+existence, and SHA-256 digests computed from the actual bytes:
+
+```bash
+bass-gates verify-result v3 V3-G06 result.json \
+  --work-order work-order.json --artifact-root runs/v3-g06
+```
+
+Remote object-store URIs require an explicit laboratory resolver; absence of a
+resolver is a verification failure, not implicit trust. Scientific statistics
+remain the responsibility of the versioned analysis scripts and human review.
+Neither schema validation nor byte verification manufactures a scientific
+conclusion.
+
+## Final gate ledger
+
+Execution results retain only `NOT_RUN`, `PASS`, `FAIL`, and `ERROR`.
+`JUSTIFIED_SKIP` is a separate final-ledger disposition and is legal only for a
+gate whose protocol decision mode is `conditional`. A `GO` ledger requires a
+verified `PASS` digest for every mandatory gate, and either `PASS` or
+`JUSTIFIED_SKIP` for each conditional gate. Final decisions require a reviewer
+identity and a timezone-aware signature timestamp; a `PENDING` ledger remains
+unsigned.

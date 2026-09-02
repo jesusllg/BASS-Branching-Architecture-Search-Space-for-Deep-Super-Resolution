@@ -16,6 +16,9 @@ from .config import (
 )
 from .encoding import (
     block_to_state,
+    canonical_architecture_count,
+    canonical_branch_genomes,
+    canonical_exchange_configuration_counts,
     canonicalize_genome,
     decode,
     encode,
@@ -34,6 +37,7 @@ from .genotype import (
     BlockGene,
     ExchangeGene,
     canonicalize_architecture,
+    canonicalize_branch,
 )
 from .model_builder import build_ibass_model, build_model, feature_tap_metadata
 from .problem import BASSProblem, IBASSProblem
@@ -64,7 +68,11 @@ __all__ = [
     "block_to_state",
     "build_ibass_model",
     "build_model",
+    "canonical_architecture_count",
+    "canonical_branch_genomes",
+    "canonical_exchange_configuration_counts",
     "canonicalize_architecture",
+    "canonicalize_branch",
     "canonicalize_genome",
     "decode",
     "encode",

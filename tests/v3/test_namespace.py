@@ -56,14 +56,15 @@ def test_branch_permutations_share_one_v3_canonical_hash():
     b = v3.BlockGene("attention", "window_transformer", 4, 1)
     skip = v3.BlockGene.skip()
     exchanges = (ExchangeGene.cimex(8), ExchangeGene.none())
+    branches = ((a, b, skip), (skip, a, b), (skip, skip, skip))
     left = v3.canonicalize_architecture(
         16,
-        ((a, skip, b), (skip, skip, skip), (b, a, skip)),
+        branches,
         exchanges,
     )
     right = v3.canonicalize_architecture(
         16,
-        ((b, a, skip), (skip, a, b), (skip, skip, skip)),
+        (branches[2], branches[0], branches[1]),
         exchanges,
     )
     assert left == right
@@ -76,6 +77,15 @@ def test_v3_json_and_hash_are_deterministic():
     assert restored == spec
     assert restored.canonical_json() == spec.canonical_json()
     assert restored.canonical_hash() == spec.canonical_hash()
+
+
+def test_stage_unsafe_v1_representation_is_rejected_explicitly():
+    spec = v3.sample(seed=42, exchange_probability=1.0)
+    payload = spec.to_dict()
+    payload["representation"] = "interaction-semantic-v1"
+
+    with pytest.raises(ValueError, match="stage-unsafe quotient"):
+        ArchitectureSpec.from_dict(payload)
 
 
 def test_exchange_gene_validation_is_strict():
@@ -108,3 +118,64 @@ def test_algebraically_inactive_centered_exchanges_are_canonicalized_away():
         (ExchangeGene.cimex(8), ExchangeGene.cimex(16)),
     )
     assert fully_inactive.exchanges == (ExchangeGene.none(), ExchangeGene.none())
+
+
+def test_enabled_exchange_is_a_hard_internal_skip_barrier():
+    a = v3.BlockGene("cnn", "res_conv", 3, 1)
+    b = v3.BlockGene("cnn", "res_conv", 5, 1)
+    c = v3.BlockGene("cnn", "res_dilated_d2", 3, 1)
+    skip = v3.BlockGene.skip()
+
+    spec = v3.canonicalize_architecture(
+        16,
+        ((skip, a, skip), (b, skip, skip), (c, skip, skip)),
+        (ExchangeGene.cimex(8), ExchangeGene.none()),
+    )
+
+    branch = next(item for item in spec.branches if a in item)
+    assert branch == (skip, a, skip)
+    assert spec.exchanges == (ExchangeGene.cimex(8), ExchangeGene.none())
+
+
+def test_repeat_runs_do_not_merge_across_enabled_exchange():
+    a1 = v3.BlockGene("cnn", "res_conv", 3, 1)
+    a2 = v3.BlockGene("cnn", "res_conv", 3, 2)
+    b = v3.BlockGene("cnn", "res_conv", 5, 1)
+    skip = v3.BlockGene.skip()
+
+    spec = v3.canonicalize_architecture(
+        16,
+        ((a1, a2, skip), (b, skip, skip), (skip, skip, skip)),
+        (ExchangeGene.cimex(16), ExchangeGene.none()),
+    )
+
+    branch = next(item for item in spec.branches if a1 in item)
+    assert branch == (a1, a2, skip)
+    assert spec.exchanges[0] == ExchangeGene.cimex(16)
+
+
+def test_none_exchange_allows_safe_skip_and_repeat_compression():
+    a1 = v3.BlockGene("cnn", "res_conv", 3, 1)
+    a2 = v3.BlockGene("cnn", "res_conv", 3, 2)
+    skip = v3.BlockGene.skip()
+
+    spec = v3.canonicalize_architecture(
+        16,
+        ((skip, a1, a2), (skip, skip, skip), (skip, skip, skip)),
+        (ExchangeGene.none(), ExchangeGene.none()),
+    )
+
+    compact = v3.BlockGene("cnn", "res_conv", 3, 3)
+    assert (compact, skip, skip) in spec.branches
+
+
+def test_corrected_stage_aware_space_has_reproducible_exact_cardinality():
+    assert len(v3.canonical_branch_genomes((False, False))) == 68_923
+    assert len(v3.canonical_branch_genomes((True, False))) == 74_089
+    assert len(v3.canonical_branch_genomes((False, True))) == 74_089
+    assert len(v3.canonical_branch_genomes((True, True))) == 79_507
+    assert v3.canonical_architecture_count() == 2_643_101_795_040_984
+
+    counts = v3.canonical_exchange_configuration_counts()
+    assert len(counts) == 9
+    assert sum(counts.values()) == v3.canonical_architecture_count()

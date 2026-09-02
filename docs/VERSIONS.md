@@ -12,7 +12,7 @@ schema, implementation, and scientific limitations:
 
 | Contract | V1 | V2 | V3 |
 |---|---|---|---|
-| Runtime status | Implemented and frozen | Implemented; experiment-gated | **Implemented; experiment-gated** |
+| Runtime status | Implemented and frozen | Implemented; experiment-gated | **Stage-aware implementation; experiment-gated** |
 | Namespace | `bass.v1` | `bass.v2` | `bass.v3` |
 | CLI selector | `--genome-version 1` | `--genome-version 2` | `--genome-version 3` |
 | Schema version | 1 | 2 | 3 |
@@ -21,7 +21,7 @@ schema, implementation, and scientific limitations:
 | Macro-topology | 3 branches × 3 units | 3 branches × 3 units | 3 branches × 3 units plus two optional exchange sites |
 | Unit families | CNN/identity | Skip, residual CNN, residual attention | V2-compatible units |
 | Cross-branch communication | Final addition only | Final addition only | Searchable CIMEX after stages 1 and 2 |
-| Canonicalization | V1 decode contract | Skip/repeat normalization and branch sorting | V2 rules plus inactive centered-exchange removal |
+| Canonicalization | V1 decode contract | Skip/repeat normalization and branch sorting | Joint stage/exchange normalization; enabled exchanges are hard barriers |
 | Optimization problem | `bass.v1.problem.BASSProblem` | `bass.v2.problem.BASSProblem` | `bass.v3.problem.BASSProblem` |
 
 ## Dependency direction
@@ -77,6 +77,12 @@ V3 extends independent branch search to interaction-aware branch search. CIMEX
 exchanges compact consensus/innovation memories after stages 1 and 2; each site
 chooses `none`, `cimex_k8`, or `cimex_k16`.
 
+V3 does not reuse V2's whole-branch compression. It compresses skips and repeat
+runs only inside segments separated by enabled CIMEX sites, then quotients
+permutations of complete branches. A `none` boundary remains safely
+compressible, preserving the exact V2 subspace. The corrected representation is
+`interaction-semantic-v2`; the earlier stage-unsafe identifier is rejected.
+
 `none/none` is a hard exact-extension contract. V3 delegates that subspace to
 the V2 model builder, and tests compare graph name, parameters, initialized
 weights, and output for the same seed. Enabled exchange cannot be projected
@@ -124,7 +130,9 @@ assert v3.to_v2(extended) == base
 
 Audit decisions are recorded in
 [`V2_AUDIT_RESPONSE.md`](V2_AUDIT_RESPONSE.md) and
-[`ROUND2_AUDIT_RESPONSE.md`](ROUND2_AUDIT_RESPONSE.md).
+[`ROUND2_AUDIT_RESPONSE.md`](ROUND2_AUDIT_RESPONSE.md). The stage-aware V3 fix
+and experimental-integrity hardening are recorded in
+[`ROUND3_AUDIT_RESPONSE.md`](ROUND3_AUDIT_RESPONSE.md).
 The executable hand-off for the remaining hardware work is
 [`../experiments/README.md`](../experiments/README.md).
 
