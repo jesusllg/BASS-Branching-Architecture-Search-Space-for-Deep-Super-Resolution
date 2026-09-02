@@ -5,6 +5,9 @@ from __future__ import annotations
 import numbers
 import random
 from collections.abc import Sequence
+from functools import lru_cache
+from itertools import product
+from math import comb
 
 from bass.v2.encoding import (
     block_to_state,
@@ -12,9 +15,6 @@ from bass.v2.encoding import (
 )
 from bass.v2.encoding import (
     decode as decode_v2,
-)
-from bass.v2.encoding import (
-    sample_canonical_genome as sample_canonical_v2_genome,
 )
 from bass.v2.genotype import ArchitectureSpec as V2ArchitectureSpec
 from bass.v2.genotype import canonicalize_architecture as canonicalize_v2
@@ -38,6 +38,7 @@ from .genotype import (
     ExchangeGene,
     architecture_from_blocks,
     canonicalize_architecture,
+    canonicalize_branch,
 )
 
 
@@ -104,20 +105,112 @@ def decode(genome: ArchitectureSpec | Sequence[int]) -> ArchitectureSpec:
     return architecture_from_blocks(CHANNELS[values[0]], blocks, exchanges)
 
 
-def _valid_exchange_states(
-    branches: tuple[tuple[BlockGene, ...], ...],
+def _exchange_barriers(states: Sequence[int]) -> tuple[bool, ...]:
+    return tuple(int(state) != 0 for state in states)
+
+
+@lru_cache(maxsize=4)
+def canonical_branch_genomes(
+    barriers: tuple[bool, ...],
 ) -> tuple[tuple[int, ...], ...]:
-    after_stage_1 = (
-        (0,)
-        if all(branch[1].is_skip and branch[2].is_skip for branch in branches)
-        else tuple(range(len(EXCHANGE_CONFIGS)))
+    """Enumerate branch states for one exact enabled-exchange barrier mask."""
+
+    if len(barriers) != EXCHANGE_SITES:
+        raise ValueError(f"IBASS requires {EXCHANGE_SITES} barrier decisions")
+    if any(type(enabled) is not bool for enabled in barriers):
+        raise TypeError("V3 barrier decisions must be booleans")
+    exchanges = tuple(
+        ExchangeGene.cimex(8) if enabled else ExchangeGene.none()
+        for enabled in barriers
     )
-    after_stage_2 = (
-        (0,)
-        if all(branch[2].is_skip for branch in branches)
-        else tuple(range(len(EXCHANGE_CONFIGS)))
+    branches = {
+        tuple(
+            block_to_state(block)
+            for block in canonicalize_branch(
+                (state_to_block(state) for state in raw_states), exchanges
+            )
+        )
+        for raw_states in product(range(UNIT_STATE_COUNT), repeat=UNITS_PER_BRANCH)
+    }
+    return tuple(sorted(branches))
+
+
+def _sample_branch_multiset(
+    rng: random.Random,
+    catalog: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[int, ...], ...]:
+    bars = sorted(rng.sample(range(len(catalog) + BRANCH_COUNT - 1), BRANCH_COUNT))
+    indices = tuple(position - rank for rank, position in enumerate(bars))
+    return tuple(catalog[index] for index in indices)
+
+
+def _has_required_downstream_transform(
+    branch_states: Sequence[Sequence[int]],
+    barriers: Sequence[bool],
+) -> bool:
+    enabled_sites = [site for site, enabled in enumerate(barriers) if enabled]
+    if not enabled_sites:
+        return True
+    first_required_stage = max(enabled_sites) + 1
+    return any(
+        any(int(state) != 0 for state in branch[first_required_stage:])
+        for branch in branch_states
     )
-    return after_stage_1, after_stage_2
+
+
+def _valid_branch_multiset_count(barriers: tuple[bool, ...]) -> int:
+    catalog = canonical_branch_genomes(barriers)
+    total = comb(len(catalog) + BRANCH_COUNT - 1, BRANCH_COUNT)
+    if not any(barriers):
+        return total
+    last_site = max(site for site, enabled in enumerate(barriers) if enabled)
+    inactive = sum(
+        all(state == 0 for state in branch[last_site + 1 :]) for branch in catalog
+    )
+    return total - comb(inactive + BRANCH_COUNT - 1, BRANCH_COUNT)
+
+
+@lru_cache(maxsize=1)
+def _exchange_configuration_count_items() -> tuple[tuple[tuple[int, ...], int], ...]:
+    return tuple(
+        (
+            tuple(states),
+            len(CHANNELS) * _valid_branch_multiset_count(_exchange_barriers(states)),
+        )
+        for states in product(range(len(EXCHANGE_CONFIGS)), repeat=EXCHANGE_SITES)
+    )
+
+
+def canonical_exchange_configuration_counts() -> dict[tuple[int, ...], int]:
+    """Return exact complete-architecture counts for all nine exchange states."""
+
+    return dict(_exchange_configuration_count_items())
+
+
+def canonical_architecture_count() -> int:
+    """Return the exact size of the corrected stage-aware V3 search space."""
+
+    return sum(canonical_exchange_configuration_counts().values())
+
+
+def _sample_exchange_states(
+    rng: random.Random, exchange_probability: float | None
+) -> tuple[int, ...]:
+    if exchange_probability is not None:
+        return tuple(
+            0
+            if rng.random() >= exchange_probability
+            else rng.randrange(1, len(EXCHANGE_CONFIGS))
+            for _ in range(EXCHANGE_SITES)
+        )
+
+    counts = canonical_exchange_configuration_counts()
+    ticket = rng.randrange(sum(counts.values()))
+    for states, count in counts.items():
+        if ticket < count:
+            return states
+        ticket -= count
+    raise AssertionError("V3 exchange-state sampling exhausted its exact count table")
 
 
 def sample_canonical_genome(
@@ -129,38 +222,23 @@ def sample_canonical_genome(
 
     With ``exchange_probability=None`` (the scientific-search default), every
     complete canonical V3 architecture has exactly equal probability.  A
-    numeric probability deliberately requests a family-conditioned prior while
-    retaining uniform canonical V2 branch sampling.
+    numeric probability deliberately requests a hierarchical exchange prior.
+    Branch multisets remain uniform within the selected stage-barrier mask.
     """
 
     if exchange_probability is not None and not 0.0 <= exchange_probability <= 1.0:
         raise ValueError("exchange_probability must lie in [0, 1] or be None")
     rng = random.Random(seed)
+    states = _sample_exchange_states(rng, exchange_probability)
+    barriers = _exchange_barriers(states)
+    catalog = canonical_branch_genomes(barriers)
     while True:
-        previous = decode_v2(sample_canonical_v2_genome(seed=rng.randrange(0, 2**63)))
-        options = _valid_exchange_states(previous.branches)
-        valid_count = len(options[0]) * len(options[1])
-
-        if exchange_probability is None:
-            # Rejection weighting compensates for base architectures that have
-            # only one or three algebraically active exchange combinations.
-            # The maximum is 3 * 3 = 9.
-            if rng.randrange(len(EXCHANGE_CONFIGS) ** EXCHANGE_SITES) >= valid_count:
-                continue
-            states = [rng.choice(site_options) for site_options in options]
-        else:
-            states = [
-                (
-                    0
-                    if len(site_options) == 1 or rng.random() >= exchange_probability
-                    else rng.choice(site_options[1:])
-                )
-                for site_options in options
-            ]
+        branch_states = _sample_branch_multiset(rng, catalog)
+        if not _has_required_downstream_transform(branch_states, barriers):
+            continue
+        blocks = [state_to_block(state) for branch in branch_states for state in branch]
         exchanges = tuple(state_to_exchange(state) for state in states)
-        return encode(
-            canonicalize_architecture(previous.channels, previous.branches, exchanges)
-        )
+        return encode(architecture_from_blocks(rng.choice(CHANNELS), blocks, exchanges))
 
 
 def sample_genome(

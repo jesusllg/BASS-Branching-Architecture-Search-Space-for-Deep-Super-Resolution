@@ -6,10 +6,73 @@ import hashlib
 import json
 from dataclasses import dataclass
 from importlib.resources import files
+from pathlib import Path
 from typing import Any
 
 _PROTOCOL_PACKAGE = "bass.experiments.protocols"
 _DECISIONS = frozenset({"automatic", "review", "conditional"})
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value.lower())
+    )
+
+
+def _is_git_oid(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) in {40, 64}
+        and all(character in "0123456789abcdef" for character in value.lower())
+    )
+
+
+def runtime_tree_digest(paths: tuple[str, ...], *, root: Path | None = None) -> str:
+    """Hash the versioned runtime files independently of the enclosing Git commit."""
+
+    base = (Path.cwd() if root is None else Path(root)).resolve()
+    selected: list[Path] = []
+    for item in paths:
+        relative = Path(item)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"Runtime path must stay inside the repository: {item}")
+        candidate = (base / relative).resolve()
+        if not candidate.is_relative_to(base):
+            raise ValueError(f"Runtime path escapes the repository: {item}")
+        if (base / relative).is_symlink():
+            raise ValueError(f"Runtime contract paths cannot be symlinks: {item}")
+        if candidate.is_file():
+            selected.append(candidate)
+        elif candidate.is_dir():
+            for path in candidate.rglob("*"):
+                if path.is_symlink():
+                    raise ValueError(
+                        f"Runtime contract trees cannot contain symlinks: {path}"
+                    )
+                if (
+                    path.is_file()
+                    and "__pycache__" not in path.parts
+                    and path.suffix not in {".pyc", ".pyo"}
+                ):
+                    selected.append(path)
+        else:
+            raise FileNotFoundError(f"Runtime contract path does not exist: {item}")
+
+    if not selected:
+        raise ValueError("Runtime contract must select at least one file")
+
+    digest = hashlib.sha256()
+    for path in sorted(set(selected)):
+        relative = path.relative_to(base).as_posix().encode("utf-8")
+        digest.update(relative)
+        digest.update(b"\0")
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _read_json(name: str) -> dict[str, Any]:
@@ -112,12 +175,43 @@ class GateSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class RuntimeContract:
+    audit_base_revision: str
+    paths: tuple[str, ...]
+    tree_sha256: str
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> RuntimeContract:
+        _require_keys(
+            payload,
+            {"audit_base_revision", "paths", "tree_sha256"},
+            "runtime contract",
+        )
+        if not _is_git_oid(payload["audit_base_revision"]):
+            raise ValueError("runtime audit_base_revision must be a full Git OID")
+        if not isinstance(payload["paths"], list):
+            raise TypeError("runtime paths must be a JSON array")
+        paths = tuple(payload["paths"])
+        if not paths or any(not isinstance(path, str) or not path for path in paths):
+            raise ValueError("runtime paths must contain non-empty strings")
+        if len(set(paths)) != len(paths):
+            raise ValueError("runtime paths must be unique")
+        if not _is_sha256(payload["tree_sha256"]):
+            raise ValueError("runtime tree_sha256 must be a lowercase SHA-256")
+        return cls(
+            audit_base_revision=payload["audit_base_revision"],
+            paths=paths,
+            tree_sha256=payload["tree_sha256"].lower(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Protocol:
     schema_version: int
     protocol_id: str
     bass_version: int
     status: str
-    base_revision: str
+    runtime_contract: RuntimeContract
     qualification_rule: str
     gates: tuple[GateSpec, ...]
 
@@ -130,7 +224,7 @@ class Protocol:
                 "protocol_id",
                 "bass_version",
                 "status",
-                "base_revision",
+                "runtime_contract",
                 "qualification_rule",
                 "gates",
             },
@@ -142,7 +236,7 @@ class Protocol:
             protocol_id=payload["protocol_id"],
             bass_version=payload["bass_version"],
             status=payload["status"],
-            base_revision=payload["base_revision"],
+            runtime_contract=RuntimeContract.from_dict(payload["runtime_contract"]),
             qualification_rule=payload["qualification_rule"],
             gates=gates,
         )
@@ -150,8 +244,8 @@ class Protocol:
         return protocol
 
     def validate(self) -> None:
-        if self.schema_version != 1:
-            raise ValueError("Only experimental protocol schema_version=1 is supported")
+        if self.schema_version != 2:
+            raise ValueError("Only experimental protocol schema_version=2 is supported")
         if self.bass_version not in {2, 3}:
             raise ValueError("Experimental protocols exist only for BASS V2 and V3")
         hardware = load_hardware_profiles()

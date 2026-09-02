@@ -1,9 +1,13 @@
 {
-  "schema_version": 1,
-  "protocol_id": "bass-v2-gates-1.0",
+  "schema_version": 2,
+  "protocol_id": "bass-v2-gates-1.1",
   "bass_version": 2,
   "status": "DEFINED_NOT_RUN",
-  "base_revision": "f0b7cf23e419f33e138b20be38257808a16694ba",
+  "runtime_contract": {
+    "audit_base_revision": "d1b624feb98d28caaf439d0d2ee9d919fede2516",
+    "paths": ["src/bass/v2", "src/bass/shared"],
+    "tree_sha256": "a354c8595c4b763e3a99a45786ac2e2660a804316f28484541f753e5934dd65e"
+  },
   "qualification_rule": "A smoke, dirty-tree, incomplete, or hardware-mismatched run cannot pass. V2 remains NO-GO until V2-G13 records a qualifying decision.",
   "gates": [
     {
@@ -151,16 +155,16 @@
     },
     {
       "id": "V2-G11",
-      "title": "Multi-seed evolutionary dry run",
+      "title": "Multi-seed evolutionary and prior-sensitivity dry run",
       "phase": "search",
       "hardware": "multi-gpu-training",
       "depends_on": ["V2-G05", "V2-G08"],
-      "cohort": {"kind": "search-runs", "seeds": [11, 23, 47, 89, 167]},
-      "command": "${BASS_NAS_RUNNER} dry-run --version 2 --seeds 11,23,47,89,167 --proxy ${APPROVED_PROXY} --budget ${PREREGISTERED_BUDGET} --output ${RUN_DIR}",
-      "outputs": ["search-plan.json", "search-history.jsonl", "populations.jsonl", "dry-run-analysis.json"],
-      "pass_criteria": ["Every run reports unique phenotype rate, duplicate rejection, mutation distance, family drift, and objective correlations", "All seeds use the same budget and immutable proxy/evaluator", "No unexplained crash, cache alias, or systematic family collapse remains"],
+      "cohort": {"kind": "search-prior-runs", "seeds_per_condition": [11, 23, 47, 89, 167], "conditions": ["canonical-uniform", "depth-stratified", "cost-stratified", "preregistered-skip-rate"]},
+      "command": "${BASS_NAS_RUNNER} dry-run --version 2 --seeds 11,23,47,89,167 --initialization-priors canonical-uniform,depth-stratified,cost-stratified,preregistered-skip-rate --proxy ${APPROVED_PROXY} --budget ${PREREGISTERED_BUDGET} --output ${RUN_DIR}",
+      "outputs": ["search-plan.json", "search-history.jsonl", "populations.jsonl", "initialization-prior-sensitivity.json", "dry-run-analysis.json"],
+      "pass_criteria": ["Every run reports unique phenotype rate, duplicate rejection, mutation distance, family drift, depth/cost drift, and objective correlations", "Canonical-uniform, depth-stratified, cost-stratified, and preregistered skip-rate initialization use identical budgets and five common seeds without mixing cohorts", "Conclusions are reported by prior and no unexplained crash, cache alias, or systematic family collapse remains"],
       "decision": "review",
-      "rationale": "One successful seed is not evidence that the search formulation is stable."
+      "rationale": "Uniform canonical sampling removes representation multiplicity but heavily favors dense V2 branches. One seed or one initialization prior is not evidence that the search formulation is stable."
     },
     {
       "id": "V2-G12",
@@ -182,9 +186,9 @@
       "hardware": "cpu-analysis",
       "depends_on": ["V2-G04", "V2-G05", "V2-G08", "V2-G10", "V2-G11", "V2-G12"],
       "cohort": {"kind": "consume-all-qualifying-gates", "size": 0},
-      "command": "${BASS_DECISION_TOOL} decide --protocol bass-v2-gates-1.0 --results ${RESULT_MANIFESTS} --output ${RUN_DIR}",
+      "command": "${BASS_DECISION_TOOL} decide --protocol bass-v2-gates-1.1 --results ${RESULT_MANIFESTS} --output ${RUN_DIR}",
       "outputs": ["gate-ledger.json", "deviations.json", "v2-decision.json"],
-      "pass_criteria": ["Every mandatory dependency has a qualifying PASS and every conditional gate is PASS or justified SKIP", "Protocol deviations, exclusions, failed seeds, OOMs, and negative results remain visible", "The signed decision states GO, REVISE, or NO-GO and identifies exactly which claims are authorized"],
+      "pass_criteria": ["Every mandatory gate has a verified qualifying PASS and every conditional gate is PASS or JUSTIFIED_SKIP in the signed ledger", "Protocol deviations, exclusions, failed seeds, OOMs, and negative results remain visible", "The signed decision states GO, REVISE, or NO-GO and identifies exactly which claims are authorized"],
       "decision": "review",
       "rationale": "Until this gate passes, V2 is executable and experiment-ready—not empirically validated or SoTA."
     }

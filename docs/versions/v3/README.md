@@ -1,7 +1,7 @@
 # BASS V3 — IBASS with optional CIMEX exchange
 
-> **Status:** runtime implemented; structurally and numerically tested;
-> publication-scale NAS remains experiment-gated. Python namespace: `bass.v3`.
+> **Status:** stage-aware runtime implemented; structural and numerical software
+> tests pass; publication-scale NAS remains experiment-gated. Python namespace: `bass.v3`.
 > CLI selector: `--genome-version 3`.
 
 BASS V3 extends the original branching search question along one new axis:
@@ -35,8 +35,9 @@ Every stage still makes three independent V2-compatible unit choices. An
 enabled exchange jointly updates all three feature tensors before the following
 stage. There is deliberately no exchange immediately before final addition:
 CIMEX centers its three corrections, so such a site would cancel exactly.
-Canonicalization also removes an earlier exchange when all downstream branch
-transforms are skips.
+Canonicalization removes an earlier exchange only when all downstream branch
+transforms are skips. It does so after preserving stage barriers; it never moves
+a downstream transform to the other side of CIMEX first.
 
 ## CIMEX primitive
 
@@ -101,16 +102,57 @@ Each exchange gene is one complete state: `none`, `cimex_k8`, or
 `cimex_k16`. No kernel, window, prototype, or enable field is conditionally
 inactive.
 
-Default NAS initialization is exactly uniform over complete canonical V3
-architectures. It samples V2's exhaustive canonical branch catalog directly,
-then rejection-weights base architectures by their number of algebraically
-valid exchange combinations. Passing an explicit `exchange_probability`
-requests a deliberate conditioned prior instead.
+Default NAS initialization is exactly uniform over complete corrected V3
+architectures. Branch catalogs are generated separately for the four enabled
+exchange masks because each mask defines a different safe equivalence relation.
+The exact corrected space contains `2,643,101,795,040,984` architectures across
+the four widths. Passing an explicit `exchange_probability` requests a
+hierarchical prior: enablement is sampled first and branch multisets are uniform
+within that barrier mask.
+
+The corrected complete-canonical prior is intentionally not exchange-neutral:
+
+| Enabled CIMEX sites | Exact architectures | Probability |
+|---:|---:|---:|
+| 0 | 218,283,124,749,400 | 8.2586% |
+| 1 | 1,084,538,018,126,640 | 41.0328% |
+| 2 | 1,340,280,652,164,944 | 50.7086% |
+
+Thus 91.7414% of initial candidates use at least one CIMEX site under this
+prior. That is mathematically uniform over architectures, not neutral between
+mechanisms. The qualifying V3 search gate compares it against an
+exchange-neutral prior, a complexity-stratified prior, and a one-factor
+exchange-mutation sensitivity condition.
 
 Uniform canonical sampling removes representation multiplicity; it does not
 flatten depth or cost. Because the unit subspace is combinatorially dense,
 complexity-stratified initialization remains a study decision rather than a
 property silently attributed to this sampler.
+
+### Stage-aware canonicalization
+
+V3 uses representation `interaction-semantic-v2`. An enabled exchange is a
+hard boundary:
+
+```text
+Stage 1 | CIMEX | Stage 2
+```
+
+Skips may be packed and adjacent equal operations may be repeat-compressed only
+inside a boundary-delimited segment. If a site is `none`, compression may cross
+that inactive boundary and exactly recovers V2 semantics. The three complete
+branches remain permutation-quotiented because shared CIMEX projections are
+branch-permutation equivariant.
+
+This distinction is material. `[skip, A, skip]` with CIMEX after Stage 1 keeps
+`A` after CIMEX; likewise `A×1 | CIMEX | A×2` cannot become
+`A×3 | CIMEX`. Exchange removal and branch normalization are solved jointly to
+a fixed point.
+
+The earlier `interaction-semantic-v1` identifier is rejected explicitly. Its
+enabled-CIMEX hashes cannot be migrated faithfully because the old quotient may
+already have discarded the intended stage position. No qualifying result was
+recorded under that representation.
 
 Variation respects branch symmetry:
 
@@ -187,6 +229,8 @@ pre-exchange tap.
 | Question | Current status |
 |---|---|
 | Strict 12-integer codec and canonical hashes | Tested |
+| Enabled CIMEX boundaries preserve stage and repeat position | Exhaustively tested over all one-branch states |
+| Corrected branch catalogs and exact V3 cardinality | Tested |
 | Algebraically inactive exchange removal | Tested |
 | V2 `none/none` graph, weights, and output equality | Tested |
 | CIMEX tensor shape, finite gradients, branch-sum conservation | Tested |
@@ -205,13 +249,14 @@ pre-exchange tap.
 Run local preflight harnesses explicitly:
 
 ```bash
+python scripts/audit_v3_stage_equivalence.py --samples 10000 --seed 42
 python scripts/audit_v3_space.py --samples 10000 --seed 42
 python scripts/validate_v3_models.py --samples 500 --seed 42 \
   --input-size 16 --scale 2
 ```
 
 Direct harness output is preflight, not a qualifying PASS. The complete
-13-gate dependency graph, required hardware, immutable work orders, result
+14-gate dependency graph, required hardware, immutable work orders, result
 contracts, and staged CIMEX ablations live in
 [`experiments/`](../../../experiments/README.md). No qualifying hardware gate
 is recorded yet.
@@ -249,9 +294,12 @@ systematic search and compare mechanisms under matched protocols.
 | Evaluation/problem | [`src/bass/v3/`](../../../src/bass/v3/) |
 | Contract tests | [`tests/v3/`](../../../tests/v3/) |
 | Structural/executable gates | [`scripts/audit_v3_space.py`](../../../scripts/audit_v3_space.py), [`scripts/validate_v3_models.py`](../../../scripts/validate_v3_models.py) |
+| Stage-equivalence preflight | [`scripts/audit_v3_stage_equivalence.py`](../../../scripts/audit_v3_stage_equivalence.py) |
 | Qualifying experiment protocol | [`experiments/`](../../../experiments/README.md) |
 
-The Round-2 audit's issue-by-issue post-V3 disposition is in
+The critical Round-3 representation finding and experiment-layer dispositions
+are reconciled in [`docs/ROUND3_AUDIT_RESPONSE.md`](../../ROUND3_AUDIT_RESPONSE.md).
+The Round-2 disposition remains in
 [`docs/ROUND2_AUDIT_RESPONSE.md`](../../ROUND2_AUDIT_RESPONSE.md). Return to the
 [research overview](../../../README.md) or inspect the
 [cross-version boundary](../../VERSIONS.md).

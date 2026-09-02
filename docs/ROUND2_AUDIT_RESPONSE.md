@@ -52,7 +52,8 @@ explanations.
 The open work is now specified rather than merely listed:
 
 - V2 has 14 gates (`V2-G00` through `V2-G13`);
-- V3 has 13 gates (`V3-G00` through `V3-G12`);
+- V3 has 14 gates (`V3-G00` through `V3-G13`), including the Round-3
+  stage-aware canonical-equivalence gate;
 - every gate declares dependencies, cohort, hardware, command contract,
   artifacts, criteria, and automatic/review/conditional disposition; and
 - `bass-gates prepare` creates a source-bound work order and Slurm template.
